@@ -16,9 +16,9 @@
 ```
 [React SPA] ──/──┐
                  ├─▶ [nginx :80] ──▶ [Django Ninja API] ──▶ [Recommendation Agent (langgraph)]
-[SSE /chat] ─────┘                                              │  tools: search/find/compatible/attributes
+[SSE /chat] ─────┘                                              │  tools: search/find/compatible/attributes/semantic
                                                                 ▼
-                                        [Knowledge Graph: Postgres + Apache AGE]
+                                    [Knowledge Graph: Postgres + Apache AGE + pgvector]
                                                                 ▲
                               [Source Connector] ◀── 고객사 소스 DB (읽기 전용)
 ```
@@ -51,6 +51,7 @@ cp .env.example .env
 # 필수
 OPEN_AI_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini            # (선택) 추천/추출 모델
+#EMBEDDING_MODEL=text-embedding-3-small  # (선택) semantic_search 임베딩 모델
 
 # 고객사 소스 DB (읽기 전용 계정 권장)
 SOURCE_DB_HOST=your-db-host
@@ -131,6 +132,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 | `SYNC_INTERVAL` | 3600 | 워커 폴링 주기(초) |
 | `SYNC_RECONCILE_EVERY` | 24 | N 사이클마다 전체 재조정(삭제·드리프트 보정). 0=하지 않음 |
 | `SYNC_LLM` | 0 | 1이면 변경분을 LLM으로 재추출(비용) |
+| `EMBEDDING_MODEL` | text-embedding-3-small | `semantic_search`·적재 임베딩 모델(ADR-0012). content-hash로 안 바뀐 상품은 재임베딩 안 함 |
 
 > 예) 저사양 박스에서 메모리를 더 아끼려면 `.env`에 `INGEST_BATCH_SIZE=200`, `INGEST_PAGE_SIZE=500`. 소스 부하를 낮추려면 `SYNC_INTERVAL=21600`(6시간).
 
