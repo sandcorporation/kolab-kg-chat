@@ -14,7 +14,7 @@ def sse(event_type: str, data: dict) -> bytes:
     return frame.encode("utf-8")
 
 
-async def agent_event_stream(agent, enricher, query: str):
+async def agent_event_stream(agent, enricher, query: str, history=None):
     """langgraph 에이전트 기반 SSE 스트림 (이슈 04, ADR-0011).
 
     token(추천 근거) → recommendation(결정적으로 부착된 카드) → done.
@@ -22,7 +22,7 @@ async def agent_event_stream(agent, enricher, query: str):
     """
     try:
         recommended: list[str] = []
-        async for event in agent.astream(query):
+        async for event in agent.astream(query, history=history):
             if event["type"] == "token":
                 yield sse("token", {"content": event["content"]})
             elif event["type"] == "status":

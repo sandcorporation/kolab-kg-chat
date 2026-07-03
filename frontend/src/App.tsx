@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ProductCard } from "./api/model";
-import { streamChat } from "./sse";
+import { streamChat, type HistoryTurn } from "./sse";
 
 interface BotTurn {
   role: "bot";
@@ -43,6 +43,7 @@ export function App() {
   const send = async () => {
     const query = input.trim();
     if (!query || busy) return;
+    const history = buildHistory(turns);  // 새 턴 추가 전, 현재까지의 대화를 직렬화
     setInput("");
     setBusy(true);
     setTurns((prev) => [
@@ -52,7 +53,7 @@ export function App() {
     ]);
     scrollToEnd();
 
-    await streamChat(query, {
+    await streamChat(query, history, {
       onToken: (text) => {
         // 첫 토큰이 도착하면 진행 상태줄을 걷어내고 근거를 이어붙인다.
         patchBot((t) => ({ ...t, status: "", rationale: t.rationale + text }));
@@ -133,6 +134,25 @@ export function App() {
       </div>
     </div>
   );
+}
+
+// 표시용 turns를 무상태 멀티턴 히스토리로 직렬화한다.
+// 봇 턴은 라시오날레 + 추천 상품 요약(이름·가격)으로 압축한다. 최근 대화만 보낸다.
+function buildHistory(turns: Turn[]): HistoryTurn[] {
+  const out: HistoryTurn[] = [];
+  for (const t of turns) {
+    if (t.role === "user") {
+      out.push({ role: "user", content: t.text });
+    } else if (!t.streaming && t.rationale) {
+      const picks = t.products.map((p) => {
+        const price = formatPrice(p.price_min, p.price_max);
+        return price ? `${p.name} (${price})` : p.name;
+      });
+      const summary = picks.length ? `\n추천 상품: ${picks.join(", ")}` : "";
+      out.push({ role: "assistant", content: t.rationale + summary });
+    }
+  }
+  return out.slice(-12); // 최근 대화로 제한(서버도 AGENT_HISTORY_TURNS로 캡)
 }
 
 function formatPrice(min?: number | null, max?: number | null): string | null {

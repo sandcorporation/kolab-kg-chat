@@ -19,6 +19,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from .context_trim import ContextTrimmer
+from .history import history_to_messages
 from .tools import GraphTools
 
 
@@ -114,6 +115,7 @@ class RecommendationAgent:
         # 컨텍스트 방어: 매 모델 호출 직전 토큰 예산 트림(카운터=원본 모델 토크나이저).
         budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
         self._trimmer = ContextTrimmer(budget, token_counter=model)
+        self._history_turns = int(os.environ.get("AGENT_HISTORY_TURNS", "5"))
         self._graph = self._build_graph(built)
 
     def _build_graph(self, built: list[StructuredTool]):
@@ -208,17 +210,20 @@ class RecommendationAgent:
     def _config(self) -> dict:
         return {"recursion_limit": self._max * 2 + 1}
 
-    def _initial_state(self, query: str) -> dict:
-        return {"messages": [HumanMessage(content=query)], "recommended_ids": []}
+    def _initial_state(self, query: str, history=None) -> dict:
+        # 무상태 멀티턴: 클라이언트 히스토리(최근 N턴)를 현재 질의 앞에 놓는다.
+        msgs = history_to_messages(history, max_turns=self._history_turns)
+        msgs.append(HumanMessage(content=query))
+        return {"messages": msgs, "recommended_ids": []}
 
-    async def run(self, query: str) -> AgentResult:
-        state = await self._graph.ainvoke(self._initial_state(query), config=self._config)
+    async def run(self, query: str, history=None) -> AgentResult:
+        state = await self._graph.ainvoke(self._initial_state(query, history), config=self._config)
         rationale = _output_content(state["messages"][-1])
         return AgentResult(
             rationale=rationale, recommended_ids=list(state.get("recommended_ids") or [])
         )
 
-    async def astream(self, query: str):
+    async def astream(self, query: str, history=None):
         """추천 근거 토큰을 흘리고, 마지막에 최종 선택 id를 알린다.
 
         yields: {"type": "status", "label": str} ... {"type": "token", "content": str}
@@ -232,7 +237,7 @@ class RecommendationAgent:
         recommended: list[str] = []
         root_run_id = None
         async for event in self._graph.astream_events(
-            self._initial_state(query), version="v2", config=self._config
+            self._initial_state(query, history), version="v2", config=self._config
         ):
             if root_run_id is None and event["event"] == "on_chain_start":
                 root_run_id = event["run_id"]  # 최상위 그래프 실행 id

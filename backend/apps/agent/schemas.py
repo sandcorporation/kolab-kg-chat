@@ -8,9 +8,16 @@ from __future__ import annotations
 from ninja import Schema
 
 
+class HistoryMessage(Schema):
+    """무상태 멀티턴 히스토리 한 줄. role: user | assistant."""
+    role: str
+    content: str
+
+
 class ChatIn(Schema):
     """POST /chat 요청 본문."""
     query: str
+    history: list[HistoryMessage] = []
 
 
 class GroundingItem(Schema):

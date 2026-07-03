@@ -23,10 +23,11 @@ async def chat_stream(request):
     except (json.JSONDecodeError, UnicodeDecodeError):
         body = {}
     query = body.get("query", "")
+    history = body.get("history") or []  # 무상태 멀티턴: 클라이언트가 최근 대화를 보낸다
 
     context = _context()
     response = StreamingHttpResponse(
-        agent_event_stream(context.agent, context.enricher, query),
+        agent_event_stream(context.agent, context.enricher, query, history=history),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"

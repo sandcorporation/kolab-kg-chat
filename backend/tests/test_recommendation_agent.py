@@ -1,11 +1,21 @@
 """이슈 03 — RecommendationAgent: langgraph 툴콜 루프."""
 from langchain_core.messages import AIMessage
+from pydantic import Field
 
 from apps.agent.recommendation_agent import RecommendationAgent
 from apps.agent.tools import GraphTools
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
 from apps.graph.store import GraphStore
 from tests.fake_chat import ScriptedChatModel
+
+
+class _RecordingModel(ScriptedChatModel):
+    """모델이 실제로 받은 메시지를 기록한다(히스토리 병합 검증용)."""
+    seen: list = Field(default_factory=list)
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.seen.append(list(messages))
+        return await super()._agenerate(messages, stop, run_manager, **kwargs)
 
 
 async def _tools_with_data():
@@ -105,6 +115,23 @@ async def test_agent_astream_emits_status_before_tokens_on_tool_call():
     assert "상품 검색 중…" in labels          # find_products → 매핑 라벨
     assert "추천 정리 중…" in labels          # recommend → 매핑 라벨
     assert types.index("status") < types.index("token")  # status가 토큰보다 앞
+
+
+async def test_history_gives_prior_context_to_model():
+    # 무상태 멀티턴: 클라이언트 히스토리가 모델 입력에 이전 맥락으로 들어간다.
+    tools = await _tools_with_data()
+    model = _RecordingModel(responses=[AIMessage(content="네, 그 상품 스펙은 붕규산입니다.")])
+    agent = RecommendationAgent(model, tools)
+
+    events = [e async for e in agent.astream("두 번째 거 스펙 알려줘", history=[
+        {"role": "user", "content": "플라스크 추천"},
+        {"role": "assistant", "content": "추천: Volumetric Flask (₩12,000)"},
+    ])]
+
+    texts = " ".join(str(m.content) for m in model.seen[0])
+    assert "Volumetric Flask" in texts   # 이전 추천이 컨텍스트에 포함
+    assert "두 번째 거" in texts          # 현재 질의도 포함
+    assert any(e["type"] == "token" for e in events)  # 응답 정상
 
 
 async def test_agent_without_tool_calls_returns_rationale_only():

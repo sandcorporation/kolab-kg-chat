@@ -13,7 +13,7 @@ class FakeAgent:
         self._recommended = recommended
         self._statuses = statuses
 
-    async def astream(self, query):
+    async def astream(self, query, history=None):
         for label in self._statuses:
             yield {"type": "status", "label": label}
         for tok in self._tokens:

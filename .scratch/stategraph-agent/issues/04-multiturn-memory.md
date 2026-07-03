@@ -1,6 +1,6 @@
 # 이슈 04: 멀티턴 메모리 (무상태 클라이언트 히스토리)
 
-Status: ready-for-agent
+Status: done — ChatIn.history, HistorySerializer(role매핑·max_turns캡), 래퍼/streaming/views 배선, 프론트 buildHistory(라시오날레+추천상품·가격). AGENT_HISTORY_TURNS. 단위 4 + 라이브 멀티턴(첫 번째 상품 후속 이해).
 Type: AFK
 Parent: .scratch/stategraph-agent/PRD.md
 
