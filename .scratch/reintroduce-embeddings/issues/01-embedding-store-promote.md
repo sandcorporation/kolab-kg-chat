@@ -1,6 +1,6 @@
 # 01 — EmbeddingStore 운영 모듈 승격 + 백필 명령
 
-Status: ready-for-agent
+Status: done — apps.embeddings.EmbeddingStore(pgvector·캐시·모델버전) + SemanticSearch + embed_products 백필. 테스트 test_embedding_store(3).
 
 ## Parent
 `.scratch/reintroduce-embeddings/PRD.md`
