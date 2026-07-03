@@ -1,0 +1,27 @@
+# ── 비밀 ──
+.env
+
+# ── 대용량 실 덤프(2.6GB) — 아웃오브밴드 제공, git 미포함 ──
+20260701_kolabshop_item_backup.sql
+*.sql.gz
+
+# ── Node / 프론트 빌드 ──
+**/node_modules/
+frontend/dist/
+**/.vite/
+
+# ── Python ──
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+*.egg-info/
+
+# ── Vision 캐시 출력(재생성 가능; 캐시는 DB에도 있음) ──
+backend/vision_out/
+vision_out/
+
+# ── 툴링/실행 아티팩트 ──
+.playwright-mcp/
+/*.png
+.DS_Store
+Thumbs.db

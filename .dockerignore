@@ -1,0 +1,17 @@
+# nginx 멀티스테이지의 빌드 컨텍스트는 리포 루트(context: .)라 여기서 대용량/불필요 파일을 제외한다.
+**/node_modules
+**/dist
+**/.vite
+.git
+frontend/openapi.json.bak
+
+# 대용량 실 덤프(2.5GB) — 이미지에 들어갈 이유 없음
+*.sql
+20260701_kolabshop_item_backup.sql
+
+# 파이썬/테스트 캐시
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+vision_out
+scratchpad

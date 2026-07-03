@@ -1,0 +1,70 @@
+# ── dev/test 오버레이 (docker compose up 시 자동 병합) ──
+# 모의 소스 DB, 실 덤프 적재용 DB, 코드 라이브 리로드, 디버깅용 호스트 포트, AGENT_FAKE 등
+# 개발 편의를 여기에 모은다. prod에서는 -f로 이 파일을 배제한다.
+services:
+  # kolabshop 소스 DB(영카트) mock — 실제 덤프 스키마의 소규모 fixture. 엔진도 실제와 동일한 MariaDB.
+  source-db:
+    image: mariadb:10.5
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: kolabshop
+      MARIADB_USER: kolab
+      MARIADB_PASSWORD: kolab
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: [ "CMD-SHELL", "mariadb-admin ping -uroot -proot --silent || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    volumes:
+      - ./source-db/initdb:/docker-entrypoint-initdb.d:ro
+      - sourcedata:/var/lib/mysql
+
+  # 실제 kolabshop 덤프(MariaDB 10.5) 적재용 — 개발/테스트 편의. 납품 시 고객사는 이 서비스
+  # 없이 .env의 SOURCE_DB_*로 자기 DB를 가리킨다.
+  real-source-db:
+    image: mariadb:10.5
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: kolabshop
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: [ "CMD-SHELL", "mariadb-admin ping -uroot -proot --silent || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    volumes:
+      - realsourcedata:/var/lib/mysql
+      - ./20260701_kolabshop_item_backup.sql:/dump.sql:ro
+
+  db:
+    ports:
+      - "5432:5432" # 로컬 디버깅용
+
+  api:
+    volumes:
+      - ./backend:/app # 코드 라이브 리로드
+    command: [ "uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+    ports:
+      - "8001:8000" # 프론트 우회 직접 디버깅용(호스트 8001 → 컨테이너 8000)
+    environment:
+      # dev는 번들 mock source-db를 가리킨다(.env의 SOURCE_DB_*보다 우선).
+      SOURCE_DB_HOST: source-db
+      SOURCE_DB_PORT: "3306"
+      SOURCE_DB_USER: kolab
+      SOURCE_DB_PASSWORD: kolab
+      SOURCE_DB_NAME: kolabshop
+      AGENT_FAKE: ${AGENT_FAKE:-} # 1이면 OpenAI 없이 결정적 스크립트 에이전트(E2E/데모)
+    depends_on:
+      db:
+        condition: service_healthy
+      source-db:
+        condition: service_healthy
+
+volumes:
+  sourcedata:
+  realsourcedata:

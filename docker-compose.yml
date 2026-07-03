@@ -1,0 +1,65 @@
+# ── 베이스(공통) 구성 — prod 지향 ──
+# 코드 마운트/모의 소스 DB 없이 이미지에 구운 코드로 동작한다.
+#
+#   dev/test : docker compose up -d           (docker-compose.override.yml 자동 병합)
+#   prod/납품 : docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 납품 시 고객사는 .env에 OPEN_AI_KEY와 자기 SOURCE_DB_* 접속정보만 채우면 된다.
+services:
+  # 우리 Knowledge Graph 저장소 (Postgres + Apache AGE). dev/prod 공통 — 고객사 Postgres엔
+  # AGE 확장이 없으므로 우리가 함께 배포한다.
+  db:
+    build: ./db
+    # 저사양(2GB) 박스 기준 보수적 튜닝. AGE는 세션별 LOAD라 shared_preload 불필요(이슈 08).
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "max_connections=50"
+    environment:
+      POSTGRES_DB: kolab
+      POSTGRES_USER: kolab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kolab}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U kolab -d kolab" ]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    image: kolab-kg-chat-api:latest # worker가 같은 이미지를 재사용(중복 빌드 방지)
+    # 호스트 포트 노출 없음 — nginx(:80)가 단일 엔드포인트로 내부 api:8000에 프록시
+    expose:
+      - "8000"
+    env_file:
+      - .env # OPEN_AI_KEY + (납품 시) 고객사 SOURCE_DB_* 접속정보
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      DATABASE_URL: postgresql://kolab:${POSTGRES_PASSWORD:-kolab}@db:5432/kolab
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 단일 엔드포인트(:80) — React(Vite) 프론트를 멀티스테이지로 빌드해 정적 서빙하고
+  # 백엔드(API/SSE)를 리버스 프록시로 묶는다.
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

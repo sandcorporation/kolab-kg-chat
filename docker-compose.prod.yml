@@ -1,0 +1,37 @@
+# ── prod/납품 오버레이 ──
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 이 조합은 docker-compose.override.yml을 병합하지 않으므로 dev 전용 요소
+# (모의/덤프 소스 DB, 코드 마운트, --reload, AGENT_FAKE, 디버깅 호스트 포트)가 전부 빠진다.
+# 소스 DB는 .env의 SOURCE_DB_*로 고객사 실 DB를 가리키고, 실제 langgraph 에이전트가 동작한다.
+#
+# mem_limit: 2GB 박스 예산 배분(합 ≈1.7GB, OS 여유). 한 프로세스의 OOM-kill 연쇄 방지(이슈 08).
+services:
+  db:
+    restart: unless-stopped
+    mem_limit: 640m
+
+  api:
+    restart: unless-stopped
+    mem_limit: 700m
+
+  nginx:
+    restart: unless-stopped
+    mem_limit: 48m
+
+  # 폴링 워커 — 소스 DB 변경분(생성/수정/삭제)을 주기적으로 지식그래프에 반영한다.
+  # 동작은 .env로 제어한다: SYNC_INTERVAL(주기), SYNC_RECONCILE_EVERY(재조정 주기), SYNC_LLM(LLM 재추출).
+  # 불필요하면 이 서비스를 제거한다.
+  worker:
+    image: kolab-kg-chat-api:latest # api와 동일 이미지 재사용(별도 빌드 없음)
+    command: [ "python", "manage.py", "sync_poll" ]
+    env_file:
+      - .env # OPEN_AI_KEY + 고객사 SOURCE_DB_*
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      DATABASE_URL: postgresql://kolab:${POSTGRES_PASSWORD:-kolab}@db:5432/kolab
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 320m
