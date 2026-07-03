@@ -25,7 +25,7 @@
 
 - **읽기 경로**: `/chat`(SSE) → Recommendation Agent가 그래프 도구로 후보를 찾고 근거를 모아 추천을 스트리밍한다. ([ADR-0011](docs/adr/0011-tool-calling-agent-single-read-path.md))
 - **쓰기 경로**: Source Connector가 고객사 DB를 읽어 Product를 조립하고 지식그래프에 적재한다. 지식그래프는 소스 DB의 복제본이 아니라 우리 스키마의 개념 모델이다.
-- 벡터/임베딩은 쓰지 않는다 — 적합성 신호는 속성·관계에 있다. ([ADR-0010](docs/adr/0010-drop-embeddings-graph-only-retrieval.md))
+- 적합성 신호는 정규화된 속성·관계에 있고, 여기에 **상품 텍스트 임베딩의 의미 유사도(`semantic_search`)를 결합**해 서술형·유의어 질의를 보강한다([ADR-0012](docs/adr/0012-reintroduce-embeddings-semantic-search.md), 리트리벌 실험 근거).
 
 ---
 
@@ -91,6 +91,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 - 기본은 **구조화된 스펙(브랜드·field_info)** 을 근거 속성으로 적재한다 — 대부분의 상품이 정형 스펙으로 커버되고 LLM 비용이 없다.
 - **대규모 확장**: 키셋 스트리밍 + 배치 세션(커넥션 재사용) + 배치당 커밋으로 수십만~수백만 Product를 저사양 박스에서 감당한다. 적재 시작 시 필수 AGE 인덱스를 자동 생성한다(`manage.py ensure_indexes`로 별도 실행도 가능).
 - `--llm`을 주면 상품 설명에서 재질·온도범위 등 Functional Attribute까지 LLM으로 추출해 근거가 풍부해진다(토큰 비용 발생).
+- **의미 검색(임베딩, ADR-0012)**: 적재 시 상품 텍스트를 자동 임베딩해 `semantic_search`를 활성화한다 — 상품명 키워드로 못 잡는 서술형·유의어·한/영 미스매치 질의를 메운다(`text-embedding-3-small`, content-hash 게이팅으로 안 바뀐 상품은 재임베딩 안 함). 이미 적재된 그래프는 `manage.py embed_products`로 백필한다.
 - 적재가 끝나면 챗봇이 바로 추천에 이 근거를 인용한다.
 
 ### 5. 접속

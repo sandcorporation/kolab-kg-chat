@@ -1,6 +1,6 @@
 # 04 — 운영/문서 정리 (env·README·ADR)
 
-Status: ready-for-agent
+Status: done — .env.example EMBEDDING_MODEL, README 적재-임베딩·백필·semantic_search 반영, 동작방식 벡터 문구 ADR-0012로 갱신.
 
 ## Parent
 `.scratch/reintroduce-embeddings/PRD.md`
