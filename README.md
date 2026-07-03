@@ -18,7 +18,7 @@ cp .env.example .env
 ```dotenv
 OPEN_AI_KEY=sk-...
 
-# 고객사 소스 DB (읽기 전용 계정 권장)
+# kolabshop_item DB (읽기 전용 계정 권장)
 SOURCE_DB_HOST=your-db-host
 SOURCE_DB_PORT=3306
 SOURCE_DB_USER=readonly_user
@@ -64,7 +64,7 @@ $COMPOSE run --rm api python manage.py ingest_products --limit 300
 http://<배포-호스트>/
 ```
 
-예) `내열성 좋은 유리 플라스크 추천해줘` → 추천 근거가 실시간(SSE)으로 스트리밍되고, 상품 카드에 근거 속성과 실제 상품 URL이 붙습니다.
+예) `내열성 좋은 유리 플라스크 추천해줘` → 추천 근거가 실시간(SSE)으로 스트리밍되고, 상품 카드에 근거 속성·가격·실제 상품 URL이 붙습니다. **후속 질의**("방금 첫 번째 상품은 어디에 써?")도 이어집니다 — 무상태 멀티턴이라 프론트가 최근 대화를 함께 보냅니다(ADR-0013). 긴 대화는 토큰 예산으로 자동 트림됩니다(`AGENT_TOKEN_BUDGET`·`AGENT_HISTORY_TURNS`, [.env.example](.env.example) 참고).
 
 ---
 
@@ -77,7 +77,7 @@ $COMPOSE run --rm api python manage.py ingest_products
 ```
 
 - 키셋 스트리밍 + 배치 커밋으로 수십만~수백만 상품도 저사양 박스에서 감당합니다.
-- 시간이 오래 걸리면 백그라운드로 돌리시고(`nohup … &`), `--batch-size N`으로 커밋 주기를 조절해주세요.
+- 시간이 오래 걸리면 `--batch-size N`으로 커밋 주기를 조절해주세요.
 
 ---
 

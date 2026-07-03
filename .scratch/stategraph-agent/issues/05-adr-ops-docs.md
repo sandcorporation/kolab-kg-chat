@@ -1,6 +1,6 @@
 # 이슈 05: ADR + 운영/문서
 
-Status: ready-for-agent
+Status: done — ADR-0013(StateGraph·무상태 메모리·토큰 트림), .env.example(AGENT_TOKEN_BUDGET·AGENT_HISTORY_TURNS), README step2(가격·멀티턴·트림).
 Type: AFK
 Parent: .scratch/stategraph-agent/PRD.md
 
