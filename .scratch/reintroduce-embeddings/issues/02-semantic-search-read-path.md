@@ -1,6 +1,6 @@
 # 02 — 운영 읽기 경로에 semantic_search 배선
 
-Status: ready-for-agent
+Status: done — RecommendationAgent semantic_tool 지원 + runtime.build_default_context 배선. 라이브 검증(서술형 질의→semantic_search→PIPET PRO). 테스트 test_semantic_tool(2).
 
 ## Parent
 `.scratch/reintroduce-embeddings/PRD.md`

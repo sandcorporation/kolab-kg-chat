@@ -59,6 +59,11 @@ class RecommendArgs(BaseModel):
     ids: list[str] = Field(description="최종 추천 상품 source_id 목록")
 
 
+class SemanticArgs(BaseModel):
+    keyword: str = Field(description="의미 유사도 검색어(자연어). 상품명 키워드로 못 잡는 서술형 질의에.")
+    k: int = 10
+
+
 def _output_content(output) -> str:
     """on_chat_model_end 출력에서 텍스트 콘텐츠를 견고하게 추출한다."""
     if output is None:
@@ -78,8 +83,9 @@ class AgentResult:
 
 
 class RecommendationAgent:
-    def __init__(self, model, tools: GraphTools, max_iterations: int = 8):
+    def __init__(self, model, tools: GraphTools, max_iterations: int = 8, semantic_tool=None):
         self._tools = tools
+        self._semantic_tool = semantic_tool  # ADR-0012: 의미 유사도 검색 도구(선택)
         self._max = max_iterations
         self._agent = create_react_agent(model, self._build_tools(tools), prompt=SYSTEM_PROMPT)
 
@@ -99,7 +105,7 @@ class RecommendationAgent:
         async def _recommend(ids: list[str]) -> dict:
             return await t.recommend(ids)
 
-        return [
+        built = [
             StructuredTool.from_function(
                 coroutine=_search_products, name="search_products",
                 description="상품명 키워드로 후보 상품(id·이름)을 찾는다. 자연어 질의의 진입 도구.",
@@ -120,12 +126,25 @@ class RecommendationAgent:
                 description="특정 상품의 상세 속성(추천 근거)을 반환한다.",
                 args_schema=ProductIdArg,
             ),
-            StructuredTool.from_function(
-                coroutine=_recommend, name="recommend",
-                description="최종 추천 상품 id를 선언한다.",
-                args_schema=RecommendArgs,
-            ),
         ]
+
+        # ADR-0012: 의미 유사도 검색(키워드·속성으로 못 잡는 서술형 질의 보강)
+        if self._semantic_tool is not None:
+            async def _semantic_search(keyword: str, k: int = 10) -> list[dict]:
+                return await self._semantic_tool.search(keyword, k=k)
+
+            built.append(StructuredTool.from_function(
+                coroutine=_semantic_search, name="semantic_search",
+                description="의미 유사도로 top-k 상품(id·이름)을 찾는다. 상품명 키워드로 못 잡는 서술형 질의에.",
+                args_schema=SemanticArgs,
+            ))
+
+        built.append(StructuredTool.from_function(
+            coroutine=_recommend, name="recommend",
+            description="최종 추천 상품 id를 선언한다.",
+            args_schema=RecommendArgs,
+        ))
+        return built
 
     @property
     def _config(self) -> dict:

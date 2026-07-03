@@ -71,5 +71,8 @@ def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
         return AgentContext(agent=ScriptedStreamAgent(store), enricher=enricher)
 
     from apps.agent.recommendation_agent import build_openai_agent
+    from apps.embeddings.store import SemanticSearch
 
-    return AgentContext(agent=build_openai_agent(GraphTools(store)), enricher=enricher)
+    # ADR-0012: 의미 유사도 검색을 도구로 추가(서술형·유의어 질의 보강).
+    agent = build_openai_agent(GraphTools(store), semantic_tool=SemanticSearch())
+    return AgentContext(agent=agent, enricher=enricher)
