@@ -6,6 +6,7 @@ recommend(ids)로 최종 선택을 선언한 뒤 한국어 추천 근거(rationa
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Annotated, TypedDict
 
@@ -17,6 +18,7 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
+from .context_trim import ContextTrimmer
 from .tools import GraphTools
 
 
@@ -109,6 +111,9 @@ class RecommendationAgent:
         self._max = max_iterations
         built = self._build_tools(tools)
         self._llm = model.bind_tools(built)  # 도구 바인딩 모델(scripted는 무시)
+        # 컨텍스트 방어: 매 모델 호출 직전 토큰 예산 트림(카운터=원본 모델 토크나이저).
+        budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
+        self._trimmer = ContextTrimmer(budget, token_counter=model)
         self._graph = self._build_graph(built)
 
     def _build_graph(self, built: list[StructuredTool]):
@@ -118,8 +123,8 @@ class RecommendationAgent:
             return {}
 
         async def agent(state: AgentState) -> dict:
-            # 이슈 02에서 매 호출 직전 토큰 예산 트림.
-            msgs = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
+            # 매 호출 직전 토큰 예산 트림(시스템 유지 + 최근 우선).
+            msgs = self._trimmer.trim([SystemMessage(content=SYSTEM_PROMPT), *state["messages"]])
             response = await self._llm.ainvoke(msgs)
             return {"messages": [response]}
 

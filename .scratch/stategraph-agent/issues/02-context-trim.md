@@ -1,6 +1,6 @@
 # 이슈 02: 컨텍스트 길이 방어 (토큰 예산 트리밍)
 
-Status: ready-for-agent
+Status: done — ContextTrimmer 딥모듈(trim_messages, 시스템 유지·최근 우선·human 경계·실패 안전망), agent 노드가 매 호출 직전 적용. AGENT_TOKEN_BUDGET(.env). 단위 3 + 라이브. tiktoken 카운터.
 Type: AFK
 Parent: .scratch/stategraph-agent/PRD.md
 
