@@ -1,5 +1,7 @@
 # 임베딩·시맨틱 검색을 제거하고 그래프 전용 검색으로 간다
 
+> **대체됨(Superseded by ADR-0012).** 리트리벌 ablation 실험에서 임베딩(semantic_search)이 검색 품질을 높인다는 근거가 나와, 임베딩을 운영 읽기 경로에 재도입한다. 이 문서는 이력 보존용이다.
+
 배포된 읽기 경로(Recommendation Agent, ADR-0007)는 Knowledge Graph를 **키워드(상품명)·Functional Attribute 필터·Compatibility 순회**로만 검색한다. pgvector 의미 유사도(ADR-0003의 세 질의 축 중 하나, ADR-0009의 임베딩)는 에이전트 도구 어디에도 연결되지 않았고, 실행 인스턴스엔 `kg_embedding` 테이블조차 없다. 이 미사용 역량을 유지할지 정한다.
 
 이 ADR은 **ADR-0009(임베딩 대상·모델)를 대체(supersede)** 하고 **ADR-0003(Postgres+AGE+pgvector)을 개정**한다.

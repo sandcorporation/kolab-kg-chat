@@ -1,6 +1,6 @@
 # Knowledge Graph는 Postgres + Apache AGE + pgvector에 저장한다
 
-> **개정됨(Amended by ADR-0010).** 의미 유사도(pgvector) 축은 제거되었다. 질의 모델은 이제 이중이다: AGE 순회 + SQL/키워드 속성 필터. pgvector는 더 이상 필요 없다.
+> **개정됨(ADR-0010 → ADR-0012).** ADR-0010이 의미 유사도(pgvector) 축을 뺐으나, 실험 근거로 ADR-0012가 임베딩·semantic_search를 재도입하며 **pgvector 축이 다시 활성화**된다. 질의 모델은 다시 삼중: AGE 순회 + SQL/키워드·속성 필터 + pgvector 의미 유사도.
 
 이 프로젝트는 한 저장소에서 세 가지를 동시에 요구한다: (1) 정규화된 속성에 대한 필터·숫자 범위 질의(ADR-0001), (2) **가변 깊이의 명시적 엣지 순회**(호환·부속·소모품 의존 체인 — "X를 쓰려면 결국 무엇이 다 필요한가"), (3) 의미 유사도(GraphRAG의 "비슷한 응용/환경" 회수). 더해 langgraph가 이미 Postgres에 상태를 영속화한다.
 

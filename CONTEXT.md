@@ -5,12 +5,12 @@
 ## Language
 
 **Knowledge Graph**:
-챗봇의 답변을 뒷받침하는 엔티티-관계 그래프 저장소. Product·Variant·Application·Condition과 그 관계를 담고 GraphRAG 방식으로 질의된다. 소스 DB의 복제본이 아니다. **개념 모델**이라 저장 엔진과 무관하다(현재는 Postgres+AGE에 우리 스키마로 저장). LangGraph의 실행 그래프(에이전트 제어 흐름)와는 전혀 다른 것이다.
-_지양_: 벡터 저장소(vector store)·임베딩 색인(이 프로젝트는 벡터를 쓰지 않는다, ADR-0010), LangGraph graph(에이전트 상태 머신을 가리킴)
+챗봇의 답변을 뒷받침하는 엔티티-관계 그래프 저장소. Product·Variant·Application·Condition과 그 관계를 담고 GraphRAG 방식으로 질의된다. Product 텍스트에 대한 의미(벡터) 색인을 곁들인다(ADR-0012). 소스 DB의 복제본이 아니다. **개념 모델**이라 저장 엔진과 무관하다(현재는 Postgres+AGE+pgvector에 우리 스키마로 저장). LangGraph의 실행 그래프(에이전트 제어 흐름)와는 전혀 다른 것이다.
+_지양_: 벡터 저장소(vector store)·임베딩 색인(둘 다 이것의 절반일 뿐), LangGraph graph(에이전트 상태 머신을 가리킴)
 
 **GraphRAG**:
-이 프로젝트의 검색 방식. Knowledge Graph에서 키워드(상품명)·Functional Attribute 필터·Compatibility 관계 순회로 후보를 검색하고, 그 근거(Grounding)로 LLM의 Rationale을 뒷받침한다. 벡터 의미유사도는 쓰지 않는다 — 적합성 신호는 정규화된 속성과 관계에 있다(ADR-0010).
-_지양_: vector search/시맨틱 검색(이 프로젝트는 안 씀), embedding retrieval
+이 프로젝트의 검색 방식. Knowledge Graph에서 키워드(상품명)·Functional Attribute 필터·Compatibility 관계 순회 *그리고* Product 텍스트 임베딩의 의미 유사도(semantic_search)를 결합해 후보를 검색하고, 그 근거(Grounding)로 LLM의 Rationale을 뒷받침한다. 임베딩은 키워드·속성이 못 잡는 서술형·유의어 질의를 메운다(ADR-0012, 실험 근거).
+_지양_: vector store(그래프 저장소와 혼동), 임베딩만으로 환원(관계·속성도 핵심)
 
 **Application**:
 고객이 기획 중인, 상품을 매칭할 대상이 되는 목적(예: PCR, 세포배양, 초저온 보관, 점도 측정). 단일 실험보다 넓은 개념으로 보관·측정·분석을 포함한다.
