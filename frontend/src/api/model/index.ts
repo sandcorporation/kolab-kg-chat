@@ -12,6 +12,8 @@ export * from './errorData';
 export * from './groundingItem';
 export * from './productCard';
 export * from './productCardImageUrl';
+export * from './productCardPriceMax';
+export * from './productCardPriceMin';
 export * from './recommendationData';
 export * from './statusData';
 export * from './tokenData';

@@ -24,6 +24,8 @@ class ProductCard(Schema):
     name: str
     url: str
     image_url: str | None = None
+    price_min: int | None = None   # 변형 가격 최저(KRW). 가격 없으면 None
+    price_max: int | None = None   # 변형 가격 최고(KRW)
     grounding: list[GroundingItem] = []
 
 

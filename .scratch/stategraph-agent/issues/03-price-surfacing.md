@@ -1,6 +1,6 @@
 # 이슈 03: 가격 노출 (변형 가격 범위)
 
-Status: ready-for-agent
+Status: done — store.price_range(변형 min/max, null 제외), enricher price_min/max, ProductCard 필드+Orval, 카드 ₩범위/단일가 표시(없으면 생략). 단위 5 + 라이브(7카드 ₩302,280 등).
 Type: AFK
 Parent: .scratch/stategraph-agent/PRD.md
 

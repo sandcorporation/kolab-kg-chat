@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProductCardImageUrl } from './productCardImageUrl';
+import type { ProductCardPriceMin } from './productCardPriceMin';
+import type { ProductCardPriceMax } from './productCardPriceMax';
 import type { GroundingItem } from './groundingItem';
 
 export interface ProductCard {
@@ -12,5 +14,7 @@ export interface ProductCard {
   name: string;
   url: string;
   image_url?: ProductCardImageUrl;
+  price_min?: ProductCardPriceMin;
+  price_max?: ProductCardPriceMax;
   grounding?: GroundingItem[];
 }

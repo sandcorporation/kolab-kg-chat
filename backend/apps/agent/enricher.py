@@ -18,11 +18,14 @@ class ProductEnricher:
             if product is None:
                 continue  # 존재하지 않는 id는 제외
             attrs = await self._store.get_attributes(source_id)
+            price_min, price_max = await self._store.price_range(source_id)
             cards.append({
                 "source_id": source_id,
                 "name": product["name"],
                 "url": KOLAB_ITEM_URL.format(source_id),
                 "image_url": product.get("image_url") or None,
+                "price_min": price_min,
+                "price_max": price_max,
                 "grounding": [
                     {"name": a["name"], "value": a["value"], "provenance": a["provenance"]}
                     for a in attrs

@@ -459,6 +459,27 @@ class GraphStore:
             await self._release(conn)
         return [json.loads(r[0]) for r in rows]
 
+    async def price_range(self, source_id: str) -> tuple[int | None, int | None]:
+        """상품 변형 가격의 최저·최고(가격 없는 변형 제외). 하나도 없으면 (None, None)."""
+        conn = await self._acquire()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure_graph(cur)
+                rows = await self._cypher(
+                    cur,
+                    "MATCH (p:Product {source_id: $sid})-[:HAS_VARIANT]->(v:Variant) "
+                    "WHERE v.price IS NOT NULL "
+                    "RETURN min(v.price), max(v.price)",
+                    {"sid": source_id},
+                    columns="(lo agtype, hi agtype)",
+                )
+        finally:
+            await self._release(conn)
+        if not rows or rows[0][0] is None:
+            return (None, None)
+        lo, hi = rows[0]
+        return (int(json.loads(lo)), int(json.loads(hi)))
+
     async def get_product(self, source_id: str) -> dict | None:
         conn = await self._acquire()
         try:

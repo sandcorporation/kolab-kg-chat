@@ -135,12 +135,21 @@ export function App() {
   );
 }
 
+function formatPrice(min?: number | null, max?: number | null): string | null {
+  if (min == null && max == null) return null;
+  const won = (n: number) => "₩" + n.toLocaleString("ko-KR");
+  if (min != null && max != null && min !== max) return `${won(min)}~${won(max)}`;
+  return won((min ?? max) as number);
+}
+
 function ProductCardView({ product }: { product: ProductCard }) {
+  const price = formatPrice(product.price_min, product.price_max);
   return (
     <a className="card" href={product.url} target="_blank" rel="noreferrer" data-testid="product-card">
       {product.image_url && <img className="card__img" src={product.image_url} alt={product.name} />}
       <div>
         <div className="card__name">{product.name}</div>
+        {price && <div className="card__price" data-testid="card-price">{price}</div>}
         <div className="card__grounding">
           {(product.grounding ?? []).map((g, i) => (
             <span key={i} className={`tag tag--${g.provenance}`}>
