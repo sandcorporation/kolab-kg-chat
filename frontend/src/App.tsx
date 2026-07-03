@@ -75,7 +75,10 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="app__header">Kolab 실험·연구 장비 추천</header>
+      <header className="app__header">
+        <span className="brand">KO<span className="brand__hl">LAB</span></span>
+        <span className="app__header-sub">실험·연구 장비 추천</span>
+      </header>
 
       <div className="chat" ref={chatRef} data-testid="chat">
         {turns.length === 0 && (
