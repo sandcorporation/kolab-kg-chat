@@ -38,7 +38,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"ingested into knowledge_graph: {counts}"))
 
     async def _run(self, limit, batch_size, use_llm):
+        from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
+
         runner = IngestRunner(
-            GraphStore(), YoungcartMySQLConnector.from_env(), build_extractor(use_llm)
+            GraphStore(), YoungcartMySQLConnector.from_env(), build_extractor(use_llm),
+            embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # ADR-0012: 적재 시 임베딩
         )
         return await runner.full_load(limit=limit, batch_size=batch_size)

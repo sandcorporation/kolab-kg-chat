@@ -49,10 +49,11 @@ def build_extractor(use_llm: bool = False):
 
 
 class IngestRunner:
-    def __init__(self, store, connector, extractor):
+    def __init__(self, store, connector, extractor, embedder=None):
         self._store = store
         self._connector = connector
         self._extractor = extractor
+        self._embedder = embedder  # ADR-0012: 있으면 적재 시 임베딩(게이팅됨)
 
     async def apply(self, source_id: str, *, gate: bool = False) -> str:
         """한 상품을 현재 상태로 반영한다(멱등). 반환: created|updated|unchanged|deleted."""
@@ -62,10 +63,16 @@ class IngestRunner:
             return "deleted"
         stored = await self._store.get_content_hash(source_id)
         if gate and stored == doc.content_hash:
-            return "unchanged"  # content-hash 게이팅: 재추출 생략
+            return "unchanged"  # content-hash 게이팅: 재추출·재임베딩 생략
         await self._store.upsert_product(doc)
         result = await self._extractor.extract(doc)
         await self._store.set_attributes(source_id, [asdict(a) for a in result.attributes])
+        if self._embedder is not None:
+            text = (doc.name + " " + " ".join(str(a.value) for a in result.attributes)).strip()
+            try:
+                await self._embedder.embed_product(source_id, doc.name, text)
+            except Exception:  # noqa: BLE001 — 임베딩 실패는 상품 적재를 막지 않는다
+                pass
         return "updated" if stored is not None else "created"
 
     def _batch_size(self, batch_size: int | None) -> int:

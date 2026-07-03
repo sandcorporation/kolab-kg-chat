@@ -1,6 +1,6 @@
 # 03 — 적재/동기화 시 임베딩(content-hash 게이팅)
 
-Status: ready-for-agent
+Status: done — IngestRunner embedder 주입 + apply에서 임베딩(게이팅 뒤, 실패 격리). ingest_products·sync_poll 명령 배선. 라이브 검증(kg_embedding 4). 테스트 test_ingest_embedding(2).
 
 ## Parent
 `.scratch/reintroduce-embeddings/PRD.md`
