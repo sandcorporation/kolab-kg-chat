@@ -6,13 +6,16 @@ from apps.agent.streaming import agent_event_stream
 
 
 class FakeAgent:
-    """astream: 근거 토큰을 흘린 뒤 최종 선택 id를 알린다."""
+    """astream: (선택) status 알림 뒤 근거 토큰을 흘리고 최종 선택 id를 알린다."""
 
-    def __init__(self, tokens, recommended):
+    def __init__(self, tokens, recommended, statuses=()):
         self._tokens = tokens
         self._recommended = recommended
+        self._statuses = statuses
 
     async def astream(self, query):
+        for label in self._statuses:
+            yield {"type": "status", "label": label}
         for tok in self._tokens:
             yield {"type": "token", "content": tok}
         yield {"type": "result", "recommended_ids": self._recommended}
@@ -44,6 +47,16 @@ async def test_event_stream_emits_typed_events():
     assert "event: recommendation" in text
     assert "1548728629" in text
     assert "event: done" in text
+
+
+async def test_event_stream_emits_status_event():
+    agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"],
+                      statuses=["상품 검색 중…"])
+    frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([]), "q")])
+    text = frames.decode("utf-8")
+
+    assert "event: status" in text
+    assert "상품 검색 중…" in text
 
 
 async def test_stream_error_becomes_error_event():

@@ -25,6 +25,8 @@ async def agent_event_stream(agent, enricher, query: str):
         async for event in agent.astream(query):
             if event["type"] == "token":
                 yield sse("token", {"content": event["content"]})
+            elif event["type"] == "status":
+                yield sse("status", {"label": event["label"]})
             elif event["type"] == "result":
                 recommended = event["recommended_ids"]
         cards = await enricher.enrich(recommended)

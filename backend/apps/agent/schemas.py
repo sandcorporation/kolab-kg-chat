@@ -42,6 +42,11 @@ class ClarificationData(Schema):
     question: str
 
 
+class StatusData(Schema):
+    """event: status — 도구 호출 진행 상태(첫 토큰 전 전환형 표시)."""
+    label: str
+
+
 class ErrorData(Schema):
     """event: error — 스트림 내 오류."""
     message: str
@@ -52,4 +57,5 @@ class ChatEventCatalog(Schema):
     token: TokenData
     recommendation: RecommendationData
     clarification: ClarificationData
+    status: StatusData
     error: ErrorData

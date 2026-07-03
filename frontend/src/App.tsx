@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ProductCard } from "./api/model";
 import { streamChat } from "./sse";
 
 interface BotTurn {
   role: "bot";
   rationale: string;
+  status: string;
   products: ProductCard[];
   streaming: boolean;
 }
@@ -45,17 +48,22 @@ export function App() {
     setTurns((prev) => [
       ...prev,
       { role: "user", text: query },
-      { role: "bot", rationale: "", products: [], streaming: true },
+      { role: "bot", rationale: "", status: "", products: [], streaming: true },
     ]);
     scrollToEnd();
 
     await streamChat(query, {
       onToken: (text) => {
-        patchBot((t) => ({ ...t, rationale: t.rationale + text }));
+        // 첫 토큰이 도착하면 진행 상태줄을 걷어내고 근거를 이어붙인다.
+        patchBot((t) => ({ ...t, status: "", rationale: t.rationale + text }));
+        scrollToEnd();
+      },
+      onStatus: (label) => {
+        patchBot((t) => ({ ...t, status: label }));
         scrollToEnd();
       },
       onClarification: (question) =>
-        patchBot((t) => ({ ...t, rationale: t.rationale + question })),
+        patchBot((t) => ({ ...t, status: "", rationale: t.rationale + question })),
       onRecommendation: (products) => patchBot((t) => ({ ...t, products })),
       onError: (message) =>
         patchBot((t) => ({ ...t, rationale: t.rationale || `오류: ${message}` })),
@@ -82,10 +90,19 @@ export function App() {
             </div>
           ) : (
             <div key={i} className="msg msg--bot" data-testid="bot-turn">
-              <span>
-                {turn.rationale}
-                {turn.streaming && <span className="cursor">▍</span>}
-              </span>
+              {turn.rationale ? (
+                <div className="rationale">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.rationale}</ReactMarkdown>
+                  {turn.streaming && <span className="cursor">▍</span>}
+                </div>
+              ) : (
+                turn.streaming && (
+                  <div className="status" data-testid="status">
+                    <span className="spinner" />
+                    {turn.status || "준비 중…"}
+                  </div>
+                )
+              )}
               {turn.products.length > 0 && (
                 <div className="cards">
                   {turn.products.map((p) => (

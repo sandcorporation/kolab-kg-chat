@@ -15,6 +15,16 @@ from pydantic import BaseModel, Field
 
 from .tools import GraphTools
 
+# 도구 호출 진행 상태 라벨(백엔드 매핑) — 첫 토큰 전 전환형 상태줄에 표시된다.
+TOOL_STATUS_LABELS = {
+    "search_products": "상품 검색 중…",
+    "find_products": "상품 검색 중…",
+    "semantic_search": "의미 유사 상품 검색 중…",
+    "find_compatible": "호환 상품 확인 중…",
+    "get_attributes": "상품 속성 조회 중…",
+    "recommend": "추천 정리 중…",
+}
+
 SYSTEM_PROMPT = (
     "당신은 실험·연구 장비 쇼핑몰(kolabshop)의 상품 추천 도우미입니다.\n"
     "작업 순서:\n"
@@ -161,8 +171,10 @@ class RecommendationAgent:
     async def astream(self, query: str):
         """추천 근거 토큰을 흘리고, 마지막에 최종 선택 id를 알린다.
 
-        yields: {"type": "token", "content": str} ... {"type": "result", "recommended_ids": [...]}
+        yields: {"type": "status", "label": str} ... {"type": "token", "content": str}
+                ... {"type": "result", "recommended_ids": [...]}
         도구 호출 라운드의 빈 콘텐츠는 걸러지고 최종 rationale 토큰만 방출된다.
+        토큰 전 도구 호출은 status로 진행 상황을 알린다(전환형 상태줄).
         """
         self._tools.recommended = []
         streamed = False
@@ -171,7 +183,11 @@ class RecommendationAgent:
             {"messages": [HumanMessage(content=query)]}, version="v2", config=self._config
         ):
             kind = event["event"]
-            if kind == "on_chat_model_stream":
+            if kind == "on_tool_start":
+                label = TOOL_STATUS_LABELS.get(event.get("name", ""))
+                if label:
+                    yield {"type": "status", "label": label}
+            elif kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
                 if content:
                     streamed = True

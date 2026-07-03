@@ -57,6 +57,30 @@ async def test_agent_astream_yields_tokens_then_result():
     assert result["recommended_ids"] == ["1548728629"]
 
 
+async def test_agent_astream_emits_status_before_tokens_on_tool_call():
+    # 도구 호출(find_products)은 매핑된 한글 라벨 status로 알려지고, 토큰보다 먼저 온다.
+    tools = await _tools_with_data()
+    model = ScriptedChatModel(responses=[
+        AIMessage(content="", tool_calls=[{
+            "name": "find_products",
+            "args": {"conditions": [{"name": "material", "op": "==", "value": "glass_borosilicate"}]},
+            "id": "c1",
+        }]),
+        AIMessage(content="", tool_calls=[{
+            "name": "recommend", "args": {"ids": ["1548728629"]}, "id": "c2",
+        }]),
+        AIMessage(content="붕규산 유리라 추천합니다."),
+    ])
+
+    events = [ev async for ev in RecommendationAgent(model, tools).astream("플라스크")]
+    types = [ev["type"] for ev in events]
+    labels = [ev["label"] for ev in events if ev["type"] == "status"]
+
+    assert "상품 검색 중…" in labels          # find_products → 매핑 라벨
+    assert "추천 정리 중…" in labels          # recommend → 매핑 라벨
+    assert types.index("status") < types.index("token")  # status가 토큰보다 앞
+
+
 async def test_agent_without_tool_calls_returns_rationale_only():
     tools = await _tools_with_data()
     model = ScriptedChatModel(responses=[

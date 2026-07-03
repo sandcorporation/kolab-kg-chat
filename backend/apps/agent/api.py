@@ -11,6 +11,7 @@ from apps.agent.schemas import (
     ClarificationData,
     ErrorData,
     RecommendationData,
+    StatusData,
     TokenData,
 )
 
@@ -24,5 +25,6 @@ async def chat_event_schema(request, payload: ChatIn):
         token=TokenData(content=""),
         recommendation=RecommendationData(products=[]),
         clarification=ClarificationData(question=""),
+        status=StatusData(label=""),
         error=ErrorData(message=""),
     )

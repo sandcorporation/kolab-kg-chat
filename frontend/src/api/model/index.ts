@@ -12,6 +12,6 @@ export * from './errorData';
 export * from './groundingItem';
 export * from './productCard';
 export * from './productCardImageUrl';
-export * from './recommendIn';
 export * from './recommendationData';
+export * from './statusData';
 export * from './tokenData';

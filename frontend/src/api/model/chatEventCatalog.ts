@@ -7,6 +7,7 @@
 import type { TokenData } from './tokenData';
 import type { RecommendationData } from './recommendationData';
 import type { ClarificationData } from './clarificationData';
+import type { StatusData } from './statusData';
 import type { ErrorData } from './errorData';
 
 /**
@@ -16,5 +17,6 @@ export interface ChatEventCatalog {
   token: TokenData;
   recommendation: RecommendationData;
   clarification: ClarificationData;
+  status: StatusData;
   error: ErrorData;
 }

@@ -2,3 +2,10 @@ node_modules
 dist
 *.local
 .vite
+
+# tsc -b 산출물(설정 파일 컴파일)
+*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+/orval.config.js
+/orval.config.d.ts

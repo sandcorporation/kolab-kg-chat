@@ -6,8 +6,7 @@
  */
 import type {
   ChatEventCatalog,
-  ChatIn,
-  RecommendIn
+  ChatIn
 } from './model';
 
 /**
@@ -54,52 +53,7 @@ export const appsCoreApiHealth = async ( options?: RequestInit): Promise<appsCor
 
 
 /**
- * @summary Recommend Endpoint
- */
-export type appsAgentApiRecommendEndpointResponse200 = {
-  data: void
-  status: 200
-}
-    
-export type appsAgentApiRecommendEndpointResponseSuccess = (appsAgentApiRecommendEndpointResponse200) & {
-  headers: Headers;
-};
-;
-
-export type appsAgentApiRecommendEndpointResponse = (appsAgentApiRecommendEndpointResponseSuccess)
-
-export const getAppsAgentApiRecommendEndpointUrl = () => {
-
-
-  
-
-  return `/recommend`
-}
-
-export const appsAgentApiRecommendEndpoint = async (recommendIn: RecommendIn, options?: RequestInit): Promise<appsAgentApiRecommendEndpointResponse> => {
-  
-  const res = await fetch(getAppsAgentApiRecommendEndpointUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      recommendIn,)
-  }
-)
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
-  const data: appsAgentApiRecommendEndpointResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as appsAgentApiRecommendEndpointResponse
-}
-
-
-
-/**
  * 코드젠 전용: POST /chat 요청 본문(ChatIn)과 SSE 이벤트 페이로드 타입을 노출한다.
-
-실제 대화는 스트리밍 뷰 POST /chat이 처리한다(SSE, text/event-stream).
  * @summary Chat Event Schema
  */
 export type appsAgentApiChatEventSchemaResponse200 = {
