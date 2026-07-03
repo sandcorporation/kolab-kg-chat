@@ -9,7 +9,6 @@ from __future__ import annotations
 class GraphTools:
     def __init__(self, store):
         self._store = store
-        self.recommended: list[str] = []
 
     async def search_products(self, keyword: str, limit: int = 10) -> list[dict]:
         """상품명 키워드 검색 — 자연어 질의로 후보를 찾는 진입 도구."""
@@ -26,8 +25,3 @@ class GraphTools:
     async def get_attributes(self, product_id: str) -> list[dict]:
         """특정 상품의 Functional Attribute(근거 상세)."""
         return await self._store.get_attributes(product_id)
-
-    async def recommend(self, ids: list[str]) -> dict:
-        """에이전트의 최종 추천 선택을 기록한다."""
-        self.recommended = list(ids)
-        return {"recommended": self.recommended}

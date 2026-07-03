@@ -49,9 +49,5 @@ async def test_get_attributes_returns_grounding():
     attrs = await tools.get_attributes("1548728629")
     assert any(a["name"] == "material" for a in attrs)
 
-
-async def test_recommend_records_selection():
-    tools = await _tools_with_data()
-    result = await tools.recommend(["1548728629", "DLM-4"])
-    assert result["recommended"] == ["1548728629", "DLM-4"]
-    assert tools.recommended == ["1548728629", "DLM-4"]
+# 추천 포착은 GraphTools 사이드채널에서 그래프 state(Command)로 이동했다.
+# 관련 검증은 test_recommendation_agent(astream result·동시성 격리)로 이관됨.

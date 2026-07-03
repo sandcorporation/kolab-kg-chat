@@ -57,6 +57,32 @@ async def test_agent_astream_yields_tokens_then_result():
     assert result["recommended_ids"] == ["1548728629"]
 
 
+async def test_concurrent_runs_do_not_share_recommendations():
+    # 같은 GraphTools를 공유하는 두 에이전트가 동시에 서로 다른 추천을 해도 섞이지 않는다
+    # (추천 포착이 공유 사이드채널이 아니라 요청별 그래프 state이므로).
+    import asyncio
+
+    tools = await _tools_with_data()
+
+    def agent_for(sid):
+        model = ScriptedChatModel(responses=[
+            AIMessage(content="", tool_calls=[{"name": "recommend", "args": {"ids": [sid]}, "id": "c1"}]),
+            AIMessage(content=f"{sid} 추천합니다."),
+        ])
+        return RecommendationAgent(model, tools)
+
+    async def collect(agent, q):
+        events = [e async for e in agent.astream(q)]
+        return [e for e in events if e["type"] == "result"][-1]["recommended_ids"]
+
+    ra, rb = await asyncio.gather(
+        collect(agent_for("1548728629"), "A"),
+        collect(agent_for("9999999999"), "B"),
+    )
+    assert ra == ["1548728629"]
+    assert rb == ["9999999999"]
+
+
 async def test_agent_astream_emits_status_before_tokens_on_tool_call():
     # 도구 호출(find_products)은 매핑된 한글 라벨 status로 알려지고, 토큰보다 먼저 온다.
     tools = await _tools_with_data()

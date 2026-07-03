@@ -7,13 +7,23 @@ recommend(ids)로 최종 선택을 선언한 뒤 한국어 추천 근거(rationa
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Annotated, TypedDict
 
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import StructuredTool
-from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import InjectedToolCallId, StructuredTool
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from .tools import GraphTools
+
+
+class AgentState(TypedDict):
+    """그래프 state — 대화 메시지 + 추천 포착(사이드채널 대신 state)."""
+    messages: Annotated[list, add_messages]
+    recommended_ids: list[str]
 
 # 도구 호출 진행 상태 라벨(백엔드 매핑) — 첫 토큰 전 전환형 상태줄에 표시된다.
 TOOL_STATUS_LABELS = {
@@ -97,7 +107,35 @@ class RecommendationAgent:
         self._tools = tools
         self._semantic_tool = semantic_tool  # ADR-0012: 의미 유사도 검색 도구(선택)
         self._max = max_iterations
-        self._agent = create_react_agent(model, self._build_tools(tools), prompt=SYSTEM_PROMPT)
+        built = self._build_tools(tools)
+        self._llm = model.bind_tools(built)  # 도구 바인딩 모델(scripted는 무시)
+        self._graph = self._build_graph(built)
+
+    def _build_graph(self, built: list[StructuredTool]):
+        """직접 짠 StateGraph: START → prepare → agent ⇄ tools → END (ADR: 노드+엣지)."""
+        async def prepare(state: AgentState) -> dict:
+            # 이슈 04에서 클라이언트 히스토리 병합. 트레이서 단계는 통과.
+            return {}
+
+        async def agent(state: AgentState) -> dict:
+            # 이슈 02에서 매 호출 직전 토큰 예산 트림.
+            msgs = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
+            response = await self._llm.ainvoke(msgs)
+            return {"messages": [response]}
+
+        def route(state: AgentState):
+            last = state["messages"][-1]
+            return "tools" if getattr(last, "tool_calls", None) else END
+
+        g = StateGraph(AgentState)
+        g.add_node("prepare", prepare)
+        g.add_node("agent", agent)
+        g.add_node("tools", ToolNode(built))
+        g.add_edge(START, "prepare")
+        g.add_edge("prepare", "agent")
+        g.add_conditional_edges("agent", route, {"tools": "tools", END: END})
+        g.add_edge("tools", "agent")
+        return g.compile()
 
     def _build_tools(self, t: GraphTools) -> list[StructuredTool]:
         async def _search_products(keyword: str, limit: int = 10) -> list[dict]:
@@ -112,8 +150,13 @@ class RecommendationAgent:
         async def _get_attributes(product_id: str) -> list[dict]:
             return await t.get_attributes(product_id)
 
-        async def _recommend(ids: list[str]) -> dict:
-            return await t.recommend(ids)
+        async def _recommend(ids: list[str], tool_call_id: Annotated[str, InjectedToolCallId]):
+            # 사이드채널 대신 그래프 state 갱신(요청별 격리 = 동시요청 레이스 제거).
+            return Command(update={
+                "recommended_ids": list(ids),
+                "messages": [ToolMessage(
+                    f"{len(ids)}개 상품을 추천으로 선언했습니다.", tool_call_id=tool_call_id)],
+            })
 
         built = [
             StructuredTool.from_function(
@@ -149,10 +192,10 @@ class RecommendationAgent:
                 args_schema=SemanticArgs,
             ))
 
+        # args_schema 미지정 → InjectedToolCallId가 모델 노출 스키마에서 자동 제외된다.
         built.append(StructuredTool.from_function(
             coroutine=_recommend, name="recommend",
-            description="최종 추천 상품 id를 선언한다.",
-            args_schema=RecommendArgs,
+            description="최종 추천 상품 source_id 목록을 선언한다.",
         ))
         return built
 
@@ -160,13 +203,15 @@ class RecommendationAgent:
     def _config(self) -> dict:
         return {"recursion_limit": self._max * 2 + 1}
 
+    def _initial_state(self, query: str) -> dict:
+        return {"messages": [HumanMessage(content=query)], "recommended_ids": []}
+
     async def run(self, query: str) -> AgentResult:
-        self._tools.recommended = []
-        state = await self._agent.ainvoke(
-            {"messages": [HumanMessage(content=query)]}, config=self._config
+        state = await self._graph.ainvoke(self._initial_state(query), config=self._config)
+        rationale = _output_content(state["messages"][-1])
+        return AgentResult(
+            rationale=rationale, recommended_ids=list(state.get("recommended_ids") or [])
         )
-        rationale = state["messages"][-1].content
-        return AgentResult(rationale=rationale, recommended_ids=list(self._tools.recommended))
 
     async def astream(self, query: str):
         """추천 근거 토큰을 흘리고, 마지막에 최종 선택 id를 알린다.
@@ -175,13 +220,17 @@ class RecommendationAgent:
                 ... {"type": "result", "recommended_ids": [...]}
         도구 호출 라운드의 빈 콘텐츠는 걸러지고 최종 rationale 토큰만 방출된다.
         토큰 전 도구 호출은 status로 진행 상황을 알린다(전환형 상태줄).
+        추천 id는 그래프 최종 state(루트 실행의 on_chain_end)에서 읽는다.
         """
-        self._tools.recommended = []
         streamed = False
         final_content = ""
-        async for event in self._agent.astream_events(
-            {"messages": [HumanMessage(content=query)]}, version="v2", config=self._config
+        recommended: list[str] = []
+        root_run_id = None
+        async for event in self._graph.astream_events(
+            self._initial_state(query), version="v2", config=self._config
         ):
+            if root_run_id is None and event["event"] == "on_chain_start":
+                root_run_id = event["run_id"]  # 최상위 그래프 실행 id
             kind = event["event"]
             if kind == "on_tool_start":
                 label = TOOL_STATUS_LABELS.get(event.get("name", ""))
@@ -196,11 +245,15 @@ class RecommendationAgent:
                 content = _output_content(event["data"].get("output"))
                 if content:
                     final_content = content
+            elif kind == "on_chain_end" and event["run_id"] == root_run_id:
+                out = event["data"].get("output")
+                if isinstance(out, dict) and "recommended_ids" in out:
+                    recommended = list(out.get("recommended_ids") or [])
         # 토큰 스트리밍을 지원하지 않는 모델은 마지막 rationale을 단어 단위로 폴백 방출한다.
         if not streamed and final_content:
             for word in final_content.split(" "):
                 yield {"type": "token", "content": word + " "}
-        yield {"type": "result", "recommended_ids": list(self._tools.recommended)}
+        yield {"type": "result", "recommended_ids": recommended}
 
 
 def build_openai_agent(tools: GraphTools, model_name: str | None = None, **kwargs) -> RecommendationAgent:
