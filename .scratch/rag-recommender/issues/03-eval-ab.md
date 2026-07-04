@@ -1,6 +1,6 @@
 # 이슈 03: eval 하네스 복원 + RAG config + A/B 실행 (게이트)
 
-Status: ready-for-agent
+Status: done — eval 하네스 복원(데이터 존속) + rag config 추가. A/B: RAG 절대 1.968 vs 에이전트 1.871, 승률 0.387 vs 0.226(semantic 0.6 vs 0.2). RAG≥에이전트 → 컷오버 진행.
 Type: HITL
 Parent: .scratch/rag-recommender/PRD.md
 

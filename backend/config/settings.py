@@ -13,7 +13,7 @@ SECRET_KEY = "dev-insecure-key-change-me"
 DEBUG = True
 ALLOWED_HOSTS = ["*"]
 
-INSTALLED_APPS: list[str] = ["apps.sync", "apps.embeddings"]  # management 명령 발견용
+INSTALLED_APPS: list[str] = ["apps.sync", "apps.embeddings", "apps.eval"]  # management 명령 발견용
 MIDDLEWARE: list[str] = []
 
 ROOT_URLCONF = "config.urls"
