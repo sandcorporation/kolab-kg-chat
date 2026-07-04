@@ -74,11 +74,13 @@ class RagRecommender:
         header_done = False
         buffer = ""
         refs: list[int] = []
+        emitted = False
         async for chunk in self._model.astream(messages):
             content = getattr(chunk, "content", "") or ""
             if not content:
                 continue
             if header_done:
+                emitted = True
                 yield {"type": "token", "content": content}
                 continue
             buffer += content
@@ -88,16 +90,23 @@ class RagRecommender:
                 header_done = True
                 rest = rest.lstrip("\n")
                 if rest:
+                    emitted = True
                     yield {"type": "token", "content": rest}
         if not header_done:  # 개행 없이 끝남
             if buffer.strip().startswith("선택"):
                 refs = parse_selection(buffer)
             elif buffer.strip():
+                emitted = True
                 yield {"type": "token", "content": buffer}  # 형식 이탈 → 전체를 근거로
 
         recommended = [
             candidates[i - 1]["source_id"] for i in refs if 1 <= i <= len(candidates)
         ]
+        if not emitted:  # LLM이 근거를 안 남긴 경우 — 빈 말풍선 대신 안내한다
+            yield {"type": "token", "content": (
+                "요청에 맞는 상품을 아래에서 확인하세요." if recommended
+                else "관련 상품을 찾지 못했습니다. 찾으시는 용도나 다른 키워드를 알려주시면 다시 찾아드리겠습니다."
+            )}
         yield {"type": "result", "recommended_ids": recommended}
 
     async def run(self, query: str, history=None) -> AgentResult:
