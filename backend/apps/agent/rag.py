@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass, field
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .context_trim import ContextTrimmer
 from .history import history_to_messages
-from .recommendation_agent import AgentResult
+
+
+@dataclass
+class AgentResult:
+    rationale: str
+    recommended_ids: list[str] = field(default_factory=list)
 
 RAG_PROMPT = (
     "당신은 실험·연구 장비 쇼핑몰(kolabshop)의 상품 추천 도우미입니다. "

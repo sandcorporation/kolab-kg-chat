@@ -1,6 +1,6 @@
 # 이슈 04: (조건부) RAG 컷오버 + 에이전트/도구 제거 + ADR
 
-Status: ready-for-agent
+Status: done — build_default_context→RagRecommender 컷오버, 에이전트·GraphTools·eval·도구프롬프트 제거, ADR-0014(0007/0011/0013 대체), RAG_TOP_K. 126 passed.
 Type: HITL
 Parent: .scratch/rag-recommender/PRD.md
 

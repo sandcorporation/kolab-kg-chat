@@ -1,5 +1,7 @@
 # 에이전트를 커스텀 StateGraph로 짜고, 무상태 히스토리 메모리 + 토큰 예산 트리밍을 둔다
 
+> **대체됨(Superseded by [ADR-0014](0014-rag-read-path-replaces-tool-calling-agent.md)).** tool-calling 에이전트를 RAG(retrieve-then-read)로 교체했다(A/B에서 RAG ≥ 에이전트). 무상태 히스토리·토큰 트리밍 결정은 RAG에서도 유지된다. 이 문서는 이력 보존용이다.
+
 Recommendation Agent(ADR-0007·0011)는 `langgraph.prebuilt.create_react_agent`를 얇게 감싸 썼다. 이 prebuilt는 **deprecated**(langgraph V2에서 제거 예정)이고, (a) 멀티턴 대화 메모리가 없어 후속 질의를 이해하지 못했으며, (b) 컨텍스트 길이 방어가 recursion_limit·도구출력 상한뿐이라 토큰 단위 가드가 없었고, (c) 추천 id를 `GraphTools.recommended` 공유 뮤터블로 포착해 동시 요청에 교차오염 위험이 있었다.
 
 ## 결정

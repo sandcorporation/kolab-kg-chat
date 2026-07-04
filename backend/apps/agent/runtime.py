@@ -54,14 +54,13 @@ class ScriptedStreamAgent:
 
 
 def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
-    """실제 경로: 운영 그래프 위에 langgraph 에이전트 + ProductEnricher를 조립한다.
+    """실제 경로: 운영 그래프 위에 RAG 추천기 + ProductEnricher를 조립한다(ADR-0014).
 
     AGENT_FAKE=1이면 OpenAI 대신 결정적 스크립트 에이전트를 쓴다(E2E/키 없는 데모).
     """
     import os
 
     from apps.agent.enricher import ProductEnricher
-    from apps.agent.tools import GraphTools
     from apps.graph.store import GraphStore
 
     store = GraphStore(graph_name=graph_name)
@@ -70,9 +69,17 @@ def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
     if os.environ.get("AGENT_FAKE"):
         return AgentContext(agent=ScriptedStreamAgent(store), enricher=enricher)
 
-    from apps.agent.recommendation_agent import build_openai_agent
+    # RAG 읽기 경로(ADR-0014): 질의이해 → 키워드∪시맨틱 → LLM 읽기·선택. 도구 루프 없음.
+    from langchain_openai import ChatOpenAI
+
+    from apps.agent.rag import RagRecommender
+    from apps.agent.retrieval import HybridRetriever, QueryAnalyzer
     from apps.embeddings.store import SemanticSearch
 
-    # ADR-0012: 의미 유사도 검색을 도구로 추가(서술형·유의어 질의 보강).
-    agent = build_openai_agent(GraphTools(store), semantic_tool=SemanticSearch())
+    model = ChatOpenAI(
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        api_key=os.environ["OPEN_AI_KEY"], temperature=0,
+    )
+    retriever = HybridRetriever(store, SemanticSearch())
+    agent = RagRecommender(model, retriever, QueryAnalyzer(model))
     return AgentContext(agent=agent, enricher=enricher)
