@@ -48,14 +48,18 @@ $COMPOSE up -d --build db api nginx
 
 ---
 
-## 2. 동작 확인 — 수백 개만 먼저 적재
+## 2. 동작 확인 — 대표 샘플 먼저 적재
 
-전체를 넣기 전에 소량(예: 300개)만 적재해 파이프라인이 실제로 도는지 확인해주세요. 멱등하므로 여러 번 실행하셔도 안전합니다.
+전체를 넣기 전에 소량만 적재해 파이프라인이 실제로 도는지 확인해주세요. 멱등하므로 여러 번 실행하셔도 안전합니다.
+
+동작 확인엔 **다양성 샘플링**을 권장합니다. 카탈로그는 소수 대형 카테고리로 크게 편향돼(상위 몇 개가 대부분) 앞에서부터 N개만 자르면 플라스크·피펫 같은 특정 유형이 통째로 빠질 수 있습니다. `--sample-diverse`는 상품 유형 키워드로 계층 샘플링해 다양한 유형이 고르게 들어가게 합니다:
 
 ```bash
-$COMPOSE run --rm api python manage.py ingest_products --limit 300
-#  → ingested into knowledge_graph: {'created': 300}
+$COMPOSE run --rm api python manage.py embed_products --sample-diverse --reset --limit 400
+#  → enriched-embedded 400 new / 400 products
 ```
+
+> 단순 순차 적재가 필요하면 `ingest_products --limit 300`을 쓰셔도 됩니다(앞에서부터 300개).
 
 적재는 상품마다 **LLM 설명으로 강화한 임베딩**(검색용, ADR-0015)과 설명만 우리 DB에 저장합니다 — 상품 데이터는 복제하지 않습니다(C: 소스 하이드레이션, ADR-0016). 강화 임베딩은 한국어 질의가 영어 상품명을 찾도록 인덱스가 지능을 갖게 해, 채팅 때 질의 번역 LLM이 필요 없습니다(채팅당 LLM 1콜). content-hash로 안 바뀐 상품은 재생성을 건너뜁니다. 대규모 카탈로그의 최초 강화는 `embed_products`(동시성) 또는 Batch API로 합니다.
 
@@ -79,14 +83,14 @@ http://<배포-호스트>/
 $COMPOSE run --rm api python manage.py ingest_products
 ```
 
-- 키셋 스트리밍 + 배치 커밋으로 수십만~수백만 상품도 저사양 박스에서 감당합니다.
-- 시간이 오래 걸리면 `--batch-size N`으로 커밋 주기를 조절해주세요.
+- 키셋 스트리밍 + 배치로 수십만~수백만 상품도 저사양 박스에서 감당합니다.
+- 시간이 오래 걸리면 `--batch-size N`으로 커밋 주기를 조절하거나, `embed_products --concurrency 8`(동시 강화)로 초기 적재를 가속하세요.
 
 ---
 
 ## 4. 변경분 추적 워커 띄우기
 
-소스 DB의 생성·수정·삭제를 주기적으로 지식그래프에 반영하는 폴링 워커입니다. **전체 적재가 끝난 뒤** 올려주세요.
+소스 DB의 생성·수정·삭제를 주기적으로 강화 임베딩에 반영하는 폴링 워커입니다. **전체 적재가 끝난 뒤** 올려주세요.
 
 ```bash
 $COMPOSE up -d worker

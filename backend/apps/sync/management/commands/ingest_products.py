@@ -16,7 +16,7 @@ def _env_bool(name: str) -> bool:
 
 
 class Command(BaseCommand):
-    help = "소스 DB의 상품을 지식그래프(knowledge_graph)로 적재한다(멱등)."
+    help = "소스 DB의 상품을 강화 임베딩으로 적재한다(멱등, C: 소스 하이드레이션)."
 
     def add_arguments(self, parser):
         # 배치/페이지 크기는 env(INGEST_BATCH_SIZE·INGEST_PAGE_SIZE)로도 제어된다. CLI가 우선.
@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         counts = asyncio.run(self._run(options["limit"], options["batch_size"], options["llm"]))
-        self.stdout.write(self.style.SUCCESS(f"ingested into knowledge_graph: {counts}"))
+        self.stdout.write(self.style.SUCCESS(f"ingested (enriched embeddings): {counts}"))
 
     async def _run(self, limit, batch_size, use_llm):
         from apps.embeddings.describe import build_describer

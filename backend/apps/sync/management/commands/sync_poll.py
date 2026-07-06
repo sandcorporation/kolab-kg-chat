@@ -1,4 +1,4 @@
-"""소스 DB를 폴링해 변경분을 지식그래프에 반영한다(폴링 워커, 저부하 증분 우선).
+"""소스 DB를 폴링해 변경분을 강화 임베딩에 반영한다(폴링 워커, 저부하 증분 우선).
 
 평소엔 it_update_time 증분(바뀐 상품만) → watermark 전진. 저빈도로 전체 재조정을 돌려
 하드 삭제·드리프트를 보정한다(ADR-0008). it_update_time이 없으면 재조정으로 폴백.
@@ -22,7 +22,7 @@ def _env_bool(name: str) -> bool:
 
 
 class Command(BaseCommand):
-    help = "소스 DB를 폴링해 변경분을 지식그래프에 반영한다(증분 + 주기적 재조정)."
+    help = "소스 DB를 폴링해 변경분을 강화 임베딩에 반영한다(증분 + 주기적 재조정)."
 
     def add_arguments(self, parser):
         # 기본값은 .env로 제어(자동 실행 워커라 CLI를 못 주는 경우가 많다). CLI가 우선.
