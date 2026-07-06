@@ -58,8 +58,13 @@ def normalize_image_url(url: str | None) -> str | None:
     return _IMAGE_BASE + url.lstrip("/")
 
 
+def _pdf_field() -> str:
+    """PDF URL을 담은 소스 컬럼명(.env로 커스텀, 기본 it_pdf_url)."""
+    return os.environ.get("PDF_FIELD", "it_pdf_url")
+
+
 def _content_hash(
-    name, brand, category_path, description_text, images, variants
+    name, brand, category_path, description_text, images, variants, pdf_url=""
 ) -> str:
     payload = {
         "name": name,
@@ -69,6 +74,8 @@ def _content_hash(
         "images": [[i.url, i.position] for i in images],
         "variants": [[v.variant_key, v.label, v.price] for v in variants],
     }
+    if pdf_url:  # 비어있으면 payload 불변 → 기존 해시와 바이트 동일(하위호환, 재처리 0)
+        payload["pdf_url"] = pdf_url
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()
@@ -338,6 +345,7 @@ class YoungcartMySQLConnector:
             if c and c.strip()
         ]
 
+        pdf_url = (item.get(_pdf_field()) or "").strip()  # 선택 스펙 PDF URL(없으면 "")
         return ProductDocument(
             source_id=item["it_id"],
             name=item["it_name"],
@@ -347,10 +355,11 @@ class YoungcartMySQLConnector:
             images=images,
             variants=variants,
             content_hash=_content_hash(
-                item["it_name"], brand, category_path, description_text, images, variants
+                item["it_name"], brand, category_path, description_text, images, variants, pdf_url
             ),
             raw=dict(item),
             fetched_at=datetime.now(timezone.utc),
+            pdf_url=pdf_url,
         )
 
     async def subscribe_changes(self):
