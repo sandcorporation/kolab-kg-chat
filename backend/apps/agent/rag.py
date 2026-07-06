@@ -44,6 +44,10 @@ _FALLBACK = (
     "관련 상품을 찾지 못했습니다. 찾으시는 용도나 다른 키워드를 알려주시면 다시 찾아드리겠습니다."
 )
 
+_FILTER_FALLBACK = (
+    "요청하신 조건(가격·스펙 등)에 맞는 상품을 찾지 못했습니다. 조건을 완화하거나 다르게 알려주시면 다시 찾아드리겠습니다."
+)
+
 
 def parse_selection(line: str) -> list[int]:
     """'선택: 2, 5' → [2,5]; '선택: 없음'/형식 이탈 → []."""
@@ -85,6 +89,7 @@ class RagRecommender:
             return
 
         keywords, semantic = analysis.keywords, analysis.semantic
+        filters = analysis.filters  # 숫자 하드 필터(루프 내내 유지 — 재정식화는 검색어만)
         n = max(1, self._max_iters)
         for i in range(n):
             last = i == n - 1
@@ -92,7 +97,12 @@ class RagRecommender:
                 "type": "status",
                 "label": "검색 중…" if i == 0 else f"다른 검색어로 다시 찾는 중… ({i + 1}/{n})",
             }
-            candidates = await self._retriever.retrieve(keywords, semantic)
+            candidates = await self._retriever.retrieve(keywords, semantic, filters=filters)
+            if not candidates and filters:  # 필터-범인 감지: 필터 빼면 결과 있나?
+                if await self._retriever.retrieve(keywords, semantic, filters=None):
+                    yield {"type": "token", "content": _FILTER_FALLBACK}
+                    yield {"type": "result", "recommended_ids": []}
+                    return
 
             # 선택 스트림 + 첫 줄 '선택:' 엿보기. 만족이거나 마지막이면 근거를 흘리고,
             # 불만족 & 잔여면 스트림을 끊어 재검색으로 넘어간다(출력 토큰 절약).

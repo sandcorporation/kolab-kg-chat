@@ -10,22 +10,35 @@ class FakeRetriever:
     def __init__(self, *cand_sets):
         self._sets = list(cand_sets) or [[]]
         self.calls: list[tuple] = []
+        self.filter_calls: list = []
 
-    async def retrieve(self, keywords, semantic, raw_query=None, k=None):
+    async def retrieve(self, keywords, semantic, filters=None, raw_query=None, k=None):
         self.calls.append((keywords, semantic))
+        self.filter_calls.append(filters)
         idx = min(len(self.calls) - 1, len(self._sets) - 1)
         return self._sets[idx]
 
 
+class FilterAwareRetriever:
+    """필터가 있으면 0건, 없으면 결과 — 필터-범인 감지 테스트용."""
+    def __init__(self, cands):
+        self._c = cands
+
+    async def retrieve(self, keywords, semantic, filters=None, raw_query=None, k=None):
+        return [] if filters else self._c
+
+
 class FakeAnalyzer:
-    def __init__(self, followup=False, terms=(["kw"], "sem"), reformulations=None):
+    def __init__(self, followup=False, terms=(["kw"], "sem"), reformulations=None, filters=None):
         self._followup = followup
         self._terms = terms
         self._reforms = list(reformulations or [])
+        self._filters = filters or {}
         self.reformulate_calls: list[tuple] = []
 
     async def analyze(self, query, history=None):
-        return Analysis(followup=self._followup, keywords=self._terms[0], semantic=self._terms[1])
+        return Analysis(followup=self._followup, keywords=self._terms[0],
+                        semantic=self._terms[1], filters=self._filters)
 
     async def reformulate(self, query, prev_terms, rejected):
         self.reformulate_calls.append((prev_terms, rejected))
@@ -134,3 +147,23 @@ async def test_malformed_output_is_safe():
 
     assert _result(events) == []
     assert "죄송" in _tokens(events)
+
+
+async def test_filters_passed_and_persist_across_reformulate():
+    flt = {"price": (None, 30000000.0)}
+    model = ScriptedChatModel(responses=[
+        AIMessage(content="선택: 없음\n\n못 찾음"), AIMessage(content="선택: 1\n\n찾음"),
+    ])
+    retr = FakeRetriever([{"source_id": "x", "name": "n", "description": ""}], CANDS)
+    analyzer = FakeAnalyzer(filters=flt, reformulations=[(["t2"], "s2")])
+    _ = [e async for e in _rec(model, retr, analyzer).astream("3000만원 이하")]
+    assert retr.filter_calls == [flt, flt]   # 필터가 두 이터레이션 모두 전달·유지
+
+
+async def test_filter_blame_gives_specific_message():
+    # 필터 걸면 0·빼면 결과 → 필터가 범인 → 구체적 안내(검색어 재시도 안 함)
+    model = ScriptedChatModel(responses=[AIMessage(content="아무거나")])  # 선택 안 불림
+    analyzer = FakeAnalyzer(filters={"price": (None, 100.0)})
+    events = [e async for e in _rec(model, FilterAwareRetriever(CANDS), analyzer).astream("100원 이하")]
+    assert "조건" in _tokens(events)          # 필터 폴백 메시지
+    assert _result(events) == []

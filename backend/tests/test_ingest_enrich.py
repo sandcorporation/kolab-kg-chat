@@ -8,7 +8,7 @@ class RecordingEmbedder:
     def __init__(self):
         self.texts: dict[str, str] = {}
 
-    async def embed_product(self, source_id, name, text, content_hash=None):
+    async def embed_product(self, source_id, name, text, content_hash=None, filters=None):
         self.texts[source_id] = text
         return True
 

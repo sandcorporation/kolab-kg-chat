@@ -41,6 +41,22 @@ async def test_analyze_parse_failure_falls_back_to_query():
     assert res.keywords == ["핀셋 있어?"]            # 원 질의로 폴백(검색 계속)
 
 
+async def test_analyze_extracts_numeric_filters():
+    a = QueryAnalyzer(_m(
+        '{"keywords":["원심분리기","centrifuge"],"semantic":"centrifuge",'
+        '"filters":{"price_max":30000000,"purity_min":99,"storage_temp_min":2,"storage_temp_max":8}}'))
+    res = await a.analyze("3000만원 이하 순도99% 냉장 원심분리기", history=None)
+    assert res.filters["price"] == (None, 30000000.0)      # 이하 → hi
+    assert res.filters["purity"] == (99.0, None)            # 이상 → lo
+    assert res.filters["storage_temp"] == (2.0, 8.0)        # 범위
+
+
+async def test_analyze_no_constraint_empty_filters():
+    a = QueryAnalyzer(_m('{"keywords":["플라스크"],"semantic":"flask"}'))
+    res = await a.analyze("플라스크 추천", history=None)
+    assert res.filters == {}
+
+
 async def test_reformulate_produces_new_terms():
     a = QueryAnalyzer(_m('{"keywords": ["교반기", "magnetic stirrer"], "semantic": "magnetic stirrer hotplate"}'))
     kws, sem = await a.reformulate(

@@ -5,16 +5,20 @@ from apps.agent.retrieval import HybridRetriever
 class FakeKeyword:
     def __init__(self, kw):
         self._kw = kw
+        self.filters = "unset"
 
-    async def keyword_search(self, query, limit=10):
+    async def keyword_search(self, query, limit=10, filters=None):
+        self.filters = filters
         return self._kw[:limit]
 
 
 class FakeSemantic:
     def __init__(self, results):
         self._r = results
+        self.filters = "unset"
 
-    async def search(self, query, k=10):
+    async def search(self, query, k=10, filters=None):
+        self.filters = filters
         return self._r[:k]
 
 
@@ -53,3 +57,10 @@ async def test_one_source_empty():
         FakeKeyword([]), FakeSemantic([_p("x")]), FakeDescriptions(), top_k=10
     ).retrieve([], "q")
     assert [c["source_id"] for c in cands] == ["x"]
+
+
+async def test_retrieve_threads_filters_to_both():
+    kw, sem = FakeKeyword([_p("a")]), FakeSemantic([_p("b")])
+    flt = {"price": (None, 30000000.0)}
+    await HybridRetriever(kw, sem, FakeDescriptions(), top_k=10).retrieve(["k"], "q", filters=flt)
+    assert kw.filters == flt and sem.filters == flt   # 두 검색에 동일 필터 전달
