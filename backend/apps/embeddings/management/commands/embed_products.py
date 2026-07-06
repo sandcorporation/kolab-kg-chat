@@ -28,9 +28,13 @@ def _env_bool(name: str) -> bool:
 
 # 실험·연구 장비 대표 상품 유형(상품명 영문 기준) — 다양성 샘플링용.
 LAB_TYPE_KEYWORDS = [
-    "flask", "pipette", "beaker", "cylinder", "stirrer", "bottle", "tube", "funnel",
-    "filter", "syringe", "vial", "dish", "rack", "thermometer", "balance", "centrifuge",
-    "forceps", "crucible", "burette", "spatula",
+    "flask", "volumetric flask", "pipette", "pipette tip", "beaker", "cylinder",
+    "graduated cylinder", "stirrer", "magnetic stirrer", "hot plate", "bottle", "wash bottle",
+    "tube", "test tube", "funnel", "filter", "syringe", "vial", "cryogenic vial", "dish",
+    "petri dish", "rack", "tube rack", "thermometer", "balance", "centrifuge", "forceps",
+    "crucible", "burette", "spatula", "vortex", "shaker", "cover glass", "slide glass",
+    "microscope slide", "immersion oil", "refractometer", "desiccator", "watch glass",
+    "dispenser", "dropper", "polycarbonate", "platinum", "tungsten", "label", "bag",
 ]
 
 
