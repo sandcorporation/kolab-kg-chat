@@ -1,6 +1,6 @@
 # 이슈 06: ADR + 운영/문서
 
-Status: ready-for-agent
+Status: done — ADR-0015(강화·분석기 제거·캐싱 결론), .env RAG_DESCRIPTION_MODEL, README 강화 반영.
 Type: AFK
 Parent: .scratch/enriched-embeddings/PRD.md
 

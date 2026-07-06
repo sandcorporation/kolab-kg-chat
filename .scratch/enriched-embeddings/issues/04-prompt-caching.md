@@ -1,6 +1,6 @@
 # 이슈 04: 프롬프트 캐싱 + LLM 비용 관측
 
-Status: ready-for-agent
+Status: done — 실측: 프롬프트 78토큰(OpenAI 캐싱 임계 1024 미달) → cached_tokens=0, 캐싱 무의미. 패딩은 손해. ADR-0015에 결론 기록(실제 레버=Batch API·content-hash). 코드 추가 없음.
 Type: AFK
 Parent: .scratch/enriched-embeddings/PRD.md
 
