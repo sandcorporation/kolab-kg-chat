@@ -41,6 +41,30 @@ async def test_analyze_parse_failure_falls_back_to_query():
     assert res.keywords == ["핀셋 있어?"]            # 원 질의로 폴백(검색 계속)
 
 
+_CAPTURED: dict = {"msgs": None}
+
+
+class _CaptureModel(ScriptedChatModel):
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        _CAPTURED["msgs"] = list(messages)
+        return await super()._agenerate(messages, stop, run_manager, **kwargs)
+
+
+async def test_analyze_respects_history_turns():
+    hist = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "q2"}, {"role": "assistant", "content": "a2"}]
+    model = _CaptureModel(responses=[AIMessage(content='{"keywords":["k"],"semantic":"s"}')])
+    await QueryAnalyzer(model, history_turns=1).analyze("새 질의", history=hist)
+    # System(1) + 최근 1턴(2메시지) + Human(1) = 4 — 오래된 q1/a1은 제외
+    assert len(_CAPTURED["msgs"]) == 4
+
+
+async def test_analyze_history_turns_from_env(monkeypatch):
+    monkeypatch.setenv("AGENT_HISTORY_TURNS", "2")
+    a = QueryAnalyzer(_m('{"keywords":["k"],"semantic":"s"}'))
+    assert a._history_turns == 2   # env가 하드코딩 대신 반영됨
+
+
 async def test_analyze_extracts_numeric_filters():
     a = QueryAnalyzer(_m(
         '{"keywords":["원심분리기","centrifuge"],"semantic":"centrifuge",'

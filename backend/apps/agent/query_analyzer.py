@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -87,9 +88,10 @@ def _is_followup(content: str) -> bool:
 
 
 class QueryAnalyzer:
-    def __init__(self, model):
+    def __init__(self, model, history_turns: int | None = None):
         self._model = model
-        self._history_turns = 5
+        # 유지할 최근 대화 턴 수 — RagRecommender와 같은 단일 env(AGENT_HISTORY_TURNS)로 제어.
+        self._history_turns = history_turns or int(os.environ.get("AGENT_HISTORY_TURNS", "5"))
 
     async def analyze(self, query: str, history=None) -> Analysis:
         """라우팅 + 초기 검색어. 히스토리 없으면 절대 followup 아님(강제 새 검색)."""
