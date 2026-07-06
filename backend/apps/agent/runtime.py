@@ -73,7 +73,7 @@ def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
     from langchain_openai import ChatOpenAI
 
     from apps.agent.rag import RagRecommender
-    from apps.agent.retrieval import HybridRetriever, QueryAnalyzer
+    from apps.agent.retrieval import HybridRetriever
     from apps.embeddings.store import SemanticSearch
 
     model = ChatOpenAI(
@@ -81,5 +81,5 @@ def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
         api_key=os.environ["OPEN_AI_KEY"], temperature=0,
     )
     retriever = HybridRetriever(store, SemanticSearch())
-    agent = RagRecommender(model, retriever, QueryAnalyzer(model))
+    agent = RagRecommender(model, retriever)
     return AgentContext(agent=agent, enricher=enricher)

@@ -39,6 +39,15 @@ class DescriptionStore:
         finally:
             await conn.close()
 
+    async def ensure(self) -> None:
+        """테이블을 1회 선생성한다(동시 백필 전 CREATE TABLE 레이스 방지)."""
+        conn = await self._connect()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure(cur)
+        finally:
+            await conn.close()
+
     async def get(self, source_id: str) -> tuple[str | None, str | None]:
         conn = await self._connect()
         try:
@@ -72,6 +81,9 @@ class ProductDescriber:
     def __init__(self, model, store: DescriptionStore):
         self._model = model
         self._store = store
+
+    async def ensure(self) -> None:
+        await self._store.ensure()
 
     async def describe(self, source_id: str, name: str, attributes: list[dict], content_hash: str) -> str:
         cached_hash, cached = await self._store.get(source_id)

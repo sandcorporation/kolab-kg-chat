@@ -47,10 +47,9 @@ def _fmt_attrs(attrs: list[dict]) -> str:
 
 
 class RagRecommender:
-    def __init__(self, model, retriever, analyzer):
+    def __init__(self, model, retriever):
         self._model = model
         self._retriever = retriever
-        self._analyzer = analyzer  # 질의 이해(한/영 키워드+시맨틱 질의)
         budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
         self._trimmer = ContextTrimmer(budget, token_counter=model)
         self._history_turns = int(os.environ.get("AGENT_HISTORY_TURNS", "5"))
@@ -67,8 +66,7 @@ class RagRecommender:
     async def astream(self, query: str, history=None):
         """status(검색 중) → 근거 token → result. 첫 줄 '선택:'은 suppress."""
         yield {"type": "status", "label": "검색 중…"}
-        keywords, semantic_query = await self._analyzer.analyze(query)  # 질의 이해(현재 질의만)
-        candidates = await self._retriever.retrieve(keywords, semantic_query)
+        candidates = await self._retriever.retrieve(query)  # 현재 질의만(강화 인덱스가 KO/EN 커버)
         messages = self._messages(query, history, candidates)
 
         header_done = False

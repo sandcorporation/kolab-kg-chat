@@ -67,6 +67,15 @@ class EmbeddingStore:
         finally:
             await conn.close()
 
+    async def ensure(self) -> None:
+        """테이블을 1회 선생성한다(동시 백필 전 CREATE TABLE 레이스 방지)."""
+        conn = await self._connect()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure(cur)
+        finally:
+            await conn.close()
+
     async def embed_product(self, source_id: str, name: str, text: str) -> bool:
         """상품 텍스트를 임베딩·저장한다. 같은 텍스트로 이미 캐시돼 있으면 False(스킵)."""
         model = self._provider.model_version

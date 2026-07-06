@@ -1,6 +1,6 @@
 # 이슈 03: Batch API 대량 강화 명령
 
-Status: ready-for-agent
+Status: done(sync) — embed_products 강화 백필(설명+동시성, ensure 레이스 수정). Batch API는 후속. 라이브: 400 강화, 플라스크 0→7.
 Type: AFK
 Parent: .scratch/enriched-embeddings/PRD.md
 
