@@ -62,6 +62,26 @@ class DescriptionStore:
             await conn.close()
         return (row[0], row[1]) if row else (None, None)
 
+    async def get_many(self, source_ids: list[str]) -> dict[str, str]:
+        """여러 source_id의 설명을 IN 절 1쿼리로 가져온다(retrieval 후보 부착용)."""
+        ids = [s for s in source_ids if s]
+        if not ids:
+            return {}
+        placeholders = ",".join(["%s"] * len(ids))
+        conn = await self._connect()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure(cur)
+                await cur.execute(
+                    f"SELECT source_id, description FROM {self._table} "
+                    f"WHERE source_id IN ({placeholders})",
+                    tuple(ids),
+                )
+                rows = await cur.fetchall()
+        finally:
+            await conn.close()
+        return {r[0]: (r[1] or "") for r in rows}
+
     async def put(self, source_id: str, content_hash: str, description: str) -> None:
         conn = await self._connect()
         try:
@@ -76,6 +96,18 @@ class DescriptionStore:
         finally:
             await conn.close()
 
+    async def delete(self, source_id: str) -> None:
+        """상품 설명을 제거한다(소스에서 사라진 상품)."""
+        conn = await self._connect()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure(cur)
+                await cur.execute(
+                    f"DELETE FROM {self._table} WHERE source_id=%s", (source_id,)
+                )
+        finally:
+            await conn.close()
+
 
 class ProductDescriber:
     def __init__(self, model, store: DescriptionStore):
@@ -84,6 +116,9 @@ class ProductDescriber:
 
     async def ensure(self) -> None:
         await self._store.ensure()
+
+    async def delete(self, source_id: str) -> None:
+        await self._store.delete(source_id)
 
     async def describe(self, source_id: str, name: str, attributes: list[dict], content_hash: str) -> str:
         cached_hash, cached = await self._store.get(source_id)

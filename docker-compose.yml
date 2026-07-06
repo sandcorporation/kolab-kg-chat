@@ -34,6 +34,8 @@ services:
       retries: 30
     volumes:
       - pgdata:/var/lib/postgresql/data
+    ports:
+      - 5433:5432
 
   api:
     build: ./backend

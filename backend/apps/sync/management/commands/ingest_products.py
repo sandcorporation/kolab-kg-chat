@@ -1,4 +1,4 @@
-"""소스 DB의 상품을 지식그래프로 적재한다(멱등). ingest_real.py를 대체.
+"""소스 DB의 상품을 강화 임베딩으로 적재한다(멱등, C: 소스 하이드레이션).
 
     docker compose ... run --rm api python manage.py ingest_products [--limit N] [--llm]
 """
@@ -8,7 +8,6 @@ import os
 from django.core.management.base import BaseCommand
 
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
-from apps.graph.store import GraphStore
 from apps.sync.runner import IngestRunner, build_extractor
 
 
@@ -42,8 +41,8 @@ class Command(BaseCommand):
         from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
 
         runner = IngestRunner(
-            GraphStore(), YoungcartMySQLConnector.from_env(), build_extractor(use_llm),
-            embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # ADR-0012: 적재 시 임베딩
+            YoungcartMySQLConnector.from_env(), build_extractor(use_llm),
+            embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # 임베딩 + content-hash 인덱스
             describer=build_describer(),  # Route C: LLM 설명으로 임베딩 강화
         )
         return await runner.full_load(limit=limit, batch_size=batch_size)

@@ -26,7 +26,7 @@ RAG_PROMPT = (
     "아래 후보 상품 중 사용자 요청에 맞는 것을 고르세요. "
     "첫 줄에 반드시 '선택: 번호, 번호'(맞는 게 없으면 '선택: 없음')를 쓰고, "
     "다음 줄부터 한국어로 간결한 추천 근거를 쓰세요. "
-    "근거는 후보의 이름·속성에 근거해야 하며 카탈로그에 없는 것을 지어내지 마세요. "
+    "근거는 후보의 이름·설명에 근거해야 하며 카탈로그에 없는 것을 지어내지 마세요. "
     "상품 URL·이미지·가격은 시스템이 붙이니 만들지 마세요. "
     "이전 대화는 사용자가 이전 추천 상품을 가리킬 때만 참고하세요. "
     "사용자가 화제를 바꾸거나 포괄적으로 물으면(예: '어떤 상품 있어?') 이전 주제를 "
@@ -42,8 +42,8 @@ def parse_selection(line: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", m.group(1))]
 
 
-def _fmt_attrs(attrs: list[dict]) -> str:
-    return ", ".join(f"{a['name']}={a['value']}" for a in attrs) or "속성 정보 없음"
+def _fmt_desc(candidate: dict) -> str:
+    return (candidate.get("description") or "").strip() or "설명 없음"
 
 
 class RagRecommender:
@@ -56,7 +56,7 @@ class RagRecommender:
 
     def _messages(self, query: str, history, candidates: list[dict]) -> list:
         cand_text = "\n".join(
-            f"{i + 1}: {c['name']} — {_fmt_attrs(c['attributes'])}"
+            f"{i + 1}: {c['name']} — {_fmt_desc(c)}"
             for i, c in enumerate(candidates)
         ) or "(후보 없음)"
         user = HumanMessage(content=f"사용자 요청: {query}\n\n후보 상품:\n{cand_text}")

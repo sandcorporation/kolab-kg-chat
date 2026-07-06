@@ -38,7 +38,8 @@ export COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
 ## 1. 서비스 빌드 & 기동
 
-지식그래프 저장소(`db`, Apache AGE 포함) · API · 프론트(`nginx`, :80)를 빌드해 띄웁니다.
+검색 색인 저장소(`db`, Postgres + pgvector + pg_trgm) · API · 프론트(`nginx`, :80)를 빌드해 띄웁니다.
+우리 DB엔 **임베딩·설명만** 담기고, 상품 사실(이름·가격·속성)은 채팅 때 소스에서 하이드레이션합니다(ADR-0016).
 **워커는 4단계에서 올립니다** — 데이터를 넣기 전에 워커가 자동으로 전체 적재를 시작하지 않도록 여기서는 제외해주세요.
 
 ```bash
@@ -56,7 +57,9 @@ $COMPOSE run --rm api python manage.py ingest_products --limit 300
 #  → ingested into knowledge_graph: {'created': 300}
 ```
 
-적재 내용은 상품 구조 스펙(브랜드·field_info)을 근거 속성으로, 그리고 **LLM 설명으로 강화한 상품 임베딩**(검색용, ADR-0015)까지입니다. 강화 임베딩은 한국어 질의가 영어 상품명을 찾도록 인덱스가 지능을 갖게 해, 채팅 때 질의 번역 LLM이 필요 없습니다(채팅당 LLM 1콜). content-hash로 안 바뀐 상품은 재생성을 건너뜁니다. 대규모 카탈로그의 최초 강화는 `embed_products`(동시성) 또는 Batch API로 합니다.
+적재는 상품마다 **LLM 설명으로 강화한 임베딩**(검색용, ADR-0015)과 설명만 우리 DB에 저장합니다 — 상품 데이터는 복제하지 않습니다(C: 소스 하이드레이션, ADR-0016). 강화 임베딩은 한국어 질의가 영어 상품명을 찾도록 인덱스가 지능을 갖게 해, 채팅 때 질의 번역 LLM이 필요 없습니다(채팅당 LLM 1콜). content-hash로 안 바뀐 상품은 재생성을 건너뜁니다. 대규모 카탈로그의 최초 강화는 `embed_products`(동시성) 또는 Batch API로 합니다.
+
+> 채팅 때 추천 카드의 이름·가격·속성·이미지는 **소스 DB에서 그 자리에서** 하이드레이션합니다(선택된 상품만 `it_id` 인덱스로 배치 조회). 따라서 **API가 적재와 동일한 `SOURCE_DB_*`를 보게** 해주세요 — 서로 다르면 카드가 비어 나옵니다.
 
 브라우저로 접속해 질문해보세요:
 

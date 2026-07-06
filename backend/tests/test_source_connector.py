@@ -56,3 +56,21 @@ async def test_viscometer_collects_spec_images():
     doc = await _connector().assemble("1667982841")
     assert len(doc.images) >= 3  # main + spec1 + spec2 + dim
     assert doc.images[0].position == 1
+
+
+async def test_assemble_many_matches_single():
+    # 배치 하이드레이션(WHERE it_id IN ...)은 개별 assemble과 동일 문서를 낸다(인덱스 친화).
+    c = _connector()
+    many = await c.assemble_many(["1548728629", "1667982841"])
+    assert set(many.keys()) == {"1548728629", "1667982841"}
+    single = await c.assemble("1548728629")
+    assert many["1548728629"].content_hash == single.content_hash
+    visc = await c.assemble("1667982841")
+    assert many["1667982841"].content_hash == visc.content_hash
+
+
+async def test_assemble_many_omits_missing_and_empty():
+    c = _connector()
+    assert await c.assemble_many([]) == {}
+    got = await c.assemble_many(["DLM-4", "does-not-exist"])
+    assert set(got.keys()) == {"DLM-4"}

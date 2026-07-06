@@ -1,6 +1,6 @@
-"""이슈 07 — 워커 증분 + 재조정 + 폴백."""
+"""ADR-0016 — 워커 증분 + 재조정 + 폴백(C: embedder = 적재 인덱스)."""
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
-from apps.graph.store import GraphStore
+from apps.embeddings.store import EmbeddingStore, FakeEmbeddingProvider
 from apps.sync.runner import WATERMARK_KEY, IngestRunner, StructuredFieldInfoExtractor
 from apps.sync.watermark import SyncWatermark
 
@@ -8,12 +8,12 @@ BASELINE = "2026-01-01 00:00:00"
 
 
 async def _runner():
-    store = GraphStore(graph_name="kg_test")
-    await store.reset()
+    embedder = EmbeddingStore(FakeEmbeddingProvider(), table="kg_embedding_test")
+    await embedder.reset()
     connector = YoungcartMySQLConnector.from_env()
-    runner = IngestRunner(store, connector, StructuredFieldInfoExtractor())
+    runner = IngestRunner(connector, StructuredFieldInfoExtractor(), embedder=embedder)
     await runner.full_load()
-    return store, connector, runner
+    return embedder, connector, runner
 
 
 async def _bump(connector, sid, when, name=None):
@@ -35,7 +35,7 @@ async def _bump(connector, sid, when, name=None):
 
 
 async def test_incremental_processes_only_changed_and_advances_watermark():
-    store, connector, runner = await _runner()
+    _, connector, runner = await _runner()
     wm = SyncWatermark()
     await wm.set(WATERMARK_KEY, BASELINE)
 
@@ -54,24 +54,16 @@ async def test_incremental_processes_only_changed_and_advances_watermark():
 
 
 async def test_reconcile_detects_deletion():
-    store, connector, runner = await _runner()
-    # 그래프엔 있으나 소스엔 없는 유령 상품 주입 → 재조정이 제거
-    from datetime import datetime, timezone
-
-    from apps.connectors.base import ProductDocument
-
-    ghost = ProductDocument(
-        source_id="ghost-x", name="G", brand="", category_path=[], description_text="",
-        images=[], variants=[], content_hash="h", raw={}, fetched_at=datetime.now(timezone.utc),
-    )
-    await store.upsert_product(ghost)
+    embedder, _, runner = await _runner()
+    # 인덱스엔 있으나 소스엔 없는 유령 상품 주입 → 재조정이 제거
+    await embedder.embed_product("ghost-x", "G", "ghost text", "h")
     counts = await runner.sync_once()
     assert counts.get("deleted") == 1
-    assert await store.get_product("ghost-x") is None
+    assert "ghost-x" not in await embedder.content_hashes()
 
 
 async def test_incremental_falls_back_when_no_update_time():
-    store, _, runner = await _runner()
+    _, _, runner = await _runner()
 
     class NoTimestampConnector:
         async def latest_update_time(self):

@@ -14,7 +14,6 @@ import os
 from django.core.management.base import BaseCommand
 
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
-from apps.graph.store import GraphStore
 from apps.sync.runner import IngestRunner, build_extractor
 
 
@@ -54,8 +53,8 @@ class Command(BaseCommand):
         from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
 
         runner = IngestRunner(
-            GraphStore(), YoungcartMySQLConnector.from_env(), build_extractor(opts["llm"]),
-            embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # ADR-0012: 변경분 임베딩
+            YoungcartMySQLConnector.from_env(), build_extractor(opts["llm"]),
+            embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # 변경분 임베딩 + content-hash 인덱스
             describer=build_describer(),  # Route C: LLM 설명으로 임베딩 강화
         )
         cycle = 0

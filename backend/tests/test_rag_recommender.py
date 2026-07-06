@@ -16,8 +16,8 @@ class FakeRetriever:
 
 
 CANDS = [
-    {"source_id": "1548728629", "name": "메스플라스크", "attributes": [{"name": "material", "value": "glass"}]},
-    {"source_id": "p2", "name": "피펫", "attributes": []},
+    {"source_id": "1548728629", "name": "메스플라스크", "description": "유리 재질 부피 측정용 플라스크"},
+    {"source_id": "p2", "name": "피펫", "description": ""},
 ]
 
 
