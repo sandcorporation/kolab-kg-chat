@@ -24,6 +24,7 @@ ANALYZE_PROMPT = (
     "그 외 새로운 상품 탐색이면 검색용 핵심 키워드를 뽑아라(한국어·영어 각각, 카탈로그 상품명은 "
     "영어가 많다). '추천해줘'·'있어?'·'찾아줘' 같은 군더더기는 빼라. "
     "이전 대화가 없으면 절대 followup이 아니다. "
+    "원 질의의 핵심 명사는 그대로 keywords에 남기고 번역·동의어를 덧붙여라(직접 매칭 보존). "
     '출력 JSON 한 줄: {"keywords": ["한글단어", "english word"], "semantic": "검색 의도를 담은 짧은 구(영어 권장)"}'
 )
 
@@ -76,6 +77,9 @@ class QueryAnalyzer:
         if history and _is_followup(content):
             return Analysis(followup=True)
         keywords, semantic = _parse_terms(content, query)
+        # keyword 드리프트 완화: 원 질의를 검색어에 항상 보존(직접 매칭 유지 + 확장 추가).
+        if query not in keywords:
+            keywords = [query, *keywords]
         return Analysis(followup=False, keywords=keywords, semantic=semantic)
 
     async def reformulate(

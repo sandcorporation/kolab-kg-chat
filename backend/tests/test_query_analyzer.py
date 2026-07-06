@@ -14,6 +14,7 @@ async def test_analyze_new_search_parses_terms():
     res = await a.analyze("내열 유리 플라스크 추천해줘", history=None)
     assert res.followup is False
     assert "flask" in res.keywords
+    assert "내열 유리 플라스크 추천해줘" in res.keywords   # 원 질의 보존(직접 매칭 유지)
     assert "flask" in res.semantic.lower()
 
 

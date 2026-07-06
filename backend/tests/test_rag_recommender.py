@@ -11,7 +11,7 @@ class FakeRetriever:
         self._sets = list(cand_sets) or [[]]
         self.calls: list[tuple] = []
 
-    async def retrieve(self, keywords, semantic, k=None):
+    async def retrieve(self, keywords, semantic, raw_query=None, k=None):
         self.calls.append((keywords, semantic))
         idx = min(len(self.calls) - 1, len(self._sets) - 1)
         return self._sets[idx]
