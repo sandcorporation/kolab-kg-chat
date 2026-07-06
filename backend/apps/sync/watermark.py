@@ -2,7 +2,6 @@
 
 작은 Postgres 테이블 `public.sync_state`(key→value)에 마지막 처리 watermark
 (예: 최대 it_update_time)를 저장해 워커 재시작 후에도 증분을 이어간다.
-connect()의 search_path가 ag_catalog 우선이라 테이블을 public으로 명시한다.
 """
 from __future__ import annotations
 

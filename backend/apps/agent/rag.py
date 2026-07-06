@@ -26,7 +26,7 @@ RAG_PROMPT = (
     "아래 후보 상품 중 사용자 요청에 맞는 것을 고르세요. "
     "첫 줄에 반드시 '선택: 번호, 번호'(맞는 게 없으면 '선택: 없음')를 쓰고, "
     "다음 줄부터 한국어로 간결한 추천 근거를 쓰세요. "
-    "근거는 후보의 이름·속성에 근거해야 하며 카탈로그에 없는 것을 지어내지 마세요. "
+    "근거는 후보의 이름·설명에 근거해야 하며 카탈로그에 없는 것을 지어내지 마세요. "
     "상품 URL·이미지·가격은 시스템이 붙이니 만들지 마세요. "
     "이전 대화는 사용자가 이전 추천 상품을 가리킬 때만 참고하세요. "
     "사용자가 화제를 바꾸거나 포괄적으로 물으면(예: '어떤 상품 있어?') 이전 주제를 "
@@ -42,22 +42,21 @@ def parse_selection(line: str) -> list[int]:
     return [int(x) for x in re.findall(r"\d+", m.group(1))]
 
 
-def _fmt_attrs(attrs: list[dict]) -> str:
-    return ", ".join(f"{a['name']}={a['value']}" for a in attrs) or "속성 정보 없음"
+def _fmt_desc(candidate: dict) -> str:
+    return (candidate.get("description") or "").strip() or "설명 없음"
 
 
 class RagRecommender:
-    def __init__(self, model, retriever, analyzer):
+    def __init__(self, model, retriever):
         self._model = model
         self._retriever = retriever
-        self._analyzer = analyzer  # 질의 이해(한/영 키워드+시맨틱 질의)
         budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
         self._trimmer = ContextTrimmer(budget, token_counter=model)
         self._history_turns = int(os.environ.get("AGENT_HISTORY_TURNS", "5"))
 
     def _messages(self, query: str, history, candidates: list[dict]) -> list:
         cand_text = "\n".join(
-            f"{i + 1}: {c['name']} — {_fmt_attrs(c['attributes'])}"
+            f"{i + 1}: {c['name']} — {_fmt_desc(c)}"
             for i, c in enumerate(candidates)
         ) or "(후보 없음)"
         user = HumanMessage(content=f"사용자 요청: {query}\n\n후보 상품:\n{cand_text}")
@@ -67,8 +66,7 @@ class RagRecommender:
     async def astream(self, query: str, history=None):
         """status(검색 중) → 근거 token → result. 첫 줄 '선택:'은 suppress."""
         yield {"type": "status", "label": "검색 중…"}
-        keywords, semantic_query = await self._analyzer.analyze(query)  # 질의 이해(현재 질의만)
-        candidates = await self._retriever.retrieve(keywords, semantic_query)
+        candidates = await self._retriever.retrieve(query)  # 현재 질의만(강화 인덱스가 KO/EN 커버)
         messages = self._messages(query, history, candidates)
 
         header_done = False

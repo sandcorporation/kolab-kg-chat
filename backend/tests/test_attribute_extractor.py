@@ -1,13 +1,10 @@
 """이슈 08 — AttributeExtractor: 분류 + 통제어휘 추출 + provenance/candidate, 그래프 영속화."""
 import json
-from dataclasses import asdict
 from datetime import datetime, timezone
 
 from apps.agent.llm import FakeLLM
 from apps.connectors.base import ProductDocument
-from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
 from apps.extraction.extractor import AttributeExtractor, coerce_confidence
-from apps.graph.store import GraphStore
 
 
 def _doc() -> ProductDocument:
@@ -69,33 +66,3 @@ async def test_provenance_override_for_ocr_reuse():
     }))
     result = await AttributeExtractor(llm, provenance="llm_ocr").extract(_doc())
     assert result.attributes[0].provenance == "llm_ocr"
-
-
-# ── 그래프 영속화 (DB 필요) ──
-async def test_attributes_persist_idempotently():
-    store = GraphStore(graph_name="kg_test")
-    await store.reset()
-    doc = await YoungcartMySQLConnector.from_env().assemble("1548728629")
-    await store.upsert_product(doc)
-
-    llm = FakeLLM(json.dumps({
-        "product_type": "glassware_consumable",
-        "attributes": [
-            {"name": "material", "value": "glass_borosilicate", "confidence": 0.9},
-            {"name": "grade", "value": "class_A", "confidence": 0.95},
-        ],
-    }))
-    result = await AttributeExtractor(llm).extract(doc)
-    payload = [asdict(a) for a in result.attributes]
-
-    await store.set_attributes(doc.source_id, payload)
-    attrs = await store.get_attributes(doc.source_id)
-    assert {a["name"] for a in attrs} == {"material", "grade"}
-    material = next(a for a in attrs if a["name"] == "material")
-    assert material["provenance"] == "llm_text"
-    assert material["is_candidate"] is False
-
-    # 멱등: 다시 set → 중복 없음
-    await store.set_attributes(doc.source_id, payload)
-    attrs2 = await store.get_attributes(doc.source_id)
-    assert len(attrs2) == 2

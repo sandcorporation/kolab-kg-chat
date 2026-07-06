@@ -19,17 +19,3 @@ async def test_pool_handles_100_concurrent_requests():
         assert results == [1] * 100
     finally:
         await pool.close()
-
-
-async def test_pooled_connection_has_age_loaded():
-    pool = make_pool(max_size=4)
-    await pool.open()
-    try:
-        async with pool.connection() as conn:
-            async with conn.cursor() as cur:
-                # configure가 search_path에 ag_catalog를 넣었는지 간접 확인
-                await cur.execute("SHOW search_path")
-                search_path = (await cur.fetchone())[0]
-                assert "ag_catalog" in search_path
-    finally:
-        await pool.close()

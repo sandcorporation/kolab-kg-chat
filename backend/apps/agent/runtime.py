@@ -28,10 +28,10 @@ def get_agent_context() -> AgentContext:
 
 
 class ScriptedStreamAgent:
-    """E2E/데모용 결정적 에이전트(AGENT_FAKE=1). OpenAI 없이 카탈로그 상위 상품을 추천한다."""
+    """E2E/데모용 결정적 에이전트(AGENT_FAKE=1). OpenAI 없이 소스 상위 상품을 추천한다."""
 
-    def __init__(self, store):
-        self._store = store
+    def __init__(self, connector):
+        self._connector = connector
 
     async def astream(self, query: str):
         rationale = (
@@ -40,46 +40,41 @@ class ScriptedStreamAgent:
         )
         for word in rationale.split(" "):
             yield {"type": "token", "content": word + " "}
-        products = await self._store.list_products()
-        # 근거(속성)가 있는 상품을 우선 추천해 카드에 grounding이 보이도록 한다.
-        picked: list[str] = []
-        for p in products:
-            if await self._store.get_attributes(p["source_id"]):
-                picked.append(p["source_id"])
-            if len(picked) >= 3:
-                break
-        if not picked:
-            picked = [p["source_id"] for p in products[:3]]
+        picked: list[str] = [sid async for sid in self._connector.iter_product_ids(limit=3)]
         yield {"type": "result", "recommended_ids": picked}
 
 
-def build_default_context(graph_name: str = "knowledge_graph") -> AgentContext:
-    """실제 경로: 운영 그래프 위에 RAG 추천기 + ProductEnricher를 조립한다(ADR-0014).
+def build_default_context() -> AgentContext:
+    """실제 경로: 우리 DB(임베딩·설명) 위 RAG 추천기 + 소스 하이드레이션 ProductEnricher 조립.
 
+    C(소스 하이드레이션, ADR-0016): 검색은 우리 DB, 상품 사실은 채팅 후반에 소스에서 붙인다.
     AGENT_FAKE=1이면 OpenAI 대신 결정적 스크립트 에이전트를 쓴다(E2E/키 없는 데모).
     """
     import os
 
     from apps.agent.enricher import ProductEnricher
-    from apps.graph.store import GraphStore
+    from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
+    from apps.sync.runner import build_extractor
 
-    store = GraphStore(graph_name=graph_name)
-    enricher = ProductEnricher(store)
+    connector = YoungcartMySQLConnector.from_env()
+    enricher = ProductEnricher(connector, build_extractor(use_llm=False))
 
     if os.environ.get("AGENT_FAKE"):
-        return AgentContext(agent=ScriptedStreamAgent(store), enricher=enricher)
+        return AgentContext(agent=ScriptedStreamAgent(connector), enricher=enricher)
 
-    # RAG 읽기 경로(ADR-0014): 질의이해 → 키워드∪시맨틱 → LLM 읽기·선택. 도구 루프 없음.
+    # RAG 읽기 경로: 키워드(name)∪시맨틱(임베딩) → LLM 읽기·선택. 질의이해·도구 루프 없음(ADR-0015).
     from langchain_openai import ChatOpenAI
 
     from apps.agent.rag import RagRecommender
-    from apps.agent.retrieval import HybridRetriever, QueryAnalyzer
-    from apps.embeddings.store import SemanticSearch
+    from apps.agent.retrieval import HybridRetriever
+    from apps.embeddings.describe import DescriptionStore
+    from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider, SemanticSearch
 
     model = ChatOpenAI(
         model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
         api_key=os.environ["OPEN_AI_KEY"], temperature=0,
     )
-    retriever = HybridRetriever(store, SemanticSearch())
-    agent = RagRecommender(model, retriever, QueryAnalyzer(model))
+    keyword = EmbeddingStore(OpenAIEmbeddingProvider())  # keyword_search(name ILIKE)
+    retriever = HybridRetriever(keyword, SemanticSearch(), DescriptionStore())
+    agent = RagRecommender(model, retriever)
     return AgentContext(agent=agent, enricher=enricher)

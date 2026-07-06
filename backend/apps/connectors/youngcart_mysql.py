@@ -204,6 +204,60 @@ class YoungcartMySQLConnector:
         finally:
             self._release(conn)
 
+        return self._build_document(item, option_rows, field_by_catno)
+
+    async def assemble_many(self, source_ids: list[str]) -> dict[str, ProductDocument]:
+        """여러 source_id를 WHERE it_id IN (...) 3쿼리로 배치 하이드레이션한다(C: 소스 하이드레이션).
+
+        세 소스 테이블 모두 it_id 인덱스를 타므로, K개를 개별 assemble하는 것보다
+        소스 DB 왕복·부하가 훨씬 낮다. 없는 id는 결과에서 생략한다.
+        """
+        ids = [s for s in dict.fromkeys(source_ids) if s]  # 중복 제거·빈값 제외, 순서 보존
+        if not ids:
+            return {}
+        placeholders = ",".join(["%s"] * len(ids))
+        conn = await self._acquire()
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(
+                    f"SELECT * FROM g5_shop_item WHERE it_id IN ({placeholders})", tuple(ids)
+                )
+                items = await cur.fetchall()
+                await cur.execute(
+                    "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, it_id "
+                    f"FROM g5_shop_item_option WHERE it_id IN ({placeholders}) AND io_use = 1 "
+                    "ORDER BY it_id, io_no",
+                    tuple(ids),
+                )
+                option_rows = await cur.fetchall()
+                try:
+                    await cur.execute(
+                        f"SELECT * FROM g5_shop_item_field_info WHERE it_id IN ({placeholders})",
+                        tuple(ids),
+                    )
+                    field_rows = await cur.fetchall()
+                except Exception:  # noqa: BLE001 — mock 등 테이블 부재 시
+                    field_rows = []
+        finally:
+            self._release(conn)
+
+        options_by_id: dict[str, list] = {}
+        for o in option_rows:
+            oid = o.pop("it_id")  # 그룹핑 키만 쓰고 raw에서 제외 → 단일 assemble과 동일 문서
+            options_by_id.setdefault(oid, []).append(o)
+        fields_by_id: dict[str, dict] = {}
+        for fr in field_rows:
+            fields_by_id.setdefault(fr.get("it_id"), {})[(fr.get("material_number") or "")] = dict(fr)
+
+        out: dict[str, ProductDocument] = {}
+        for item in items:
+            it_id = item["it_id"]
+            out[it_id] = self._build_document(
+                item, options_by_id.get(it_id, []), fields_by_id.get(it_id, {})
+            )
+        return out
+
+    def _build_document(self, item, option_rows, field_by_catno) -> ProductDocument:
         base_price = item.get("it_price") or 0
         variants = []
         for o in option_rows:

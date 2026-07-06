@@ -1,14 +1,6 @@
-# Apache AGE(openCypher) + pgvector 를 한 Postgres 16 인스턴스에 (ADR-0003)
-FROM apache/age:release_PG16_1.5.0
-
-RUN apt-get update \
- && apt-get install -y --no-install-recommends build-essential git ca-certificates postgresql-server-dev-16 \
- && git clone --depth 1 --branch v0.8.0 https://github.com/pgvector/pgvector.git /tmp/pgvector \
- && cd /tmp/pgvector \
- && make \
- && make install \
- && rm -rf /tmp/pgvector \
- && apt-get purge -y --auto-remove build-essential git postgresql-server-dev-16 \
- && rm -rf /var/lib/apt/lists/*
+# Postgres 16 + pgvector + pg_trgm (ADR-0016: AGE 제거 — 우리 DB엔 임베딩·설명만)
+# C(소스 하이드레이션): 상품 사실은 소스에서 채팅 때 하이드레이션하고, 우리 DB는
+# 검색 색인(pgvector 시맨틱 + pg_trgm 키워드)만 보관한다. openCypher 그래프 불필요.
+FROM pgvector/pgvector:pg16
 
 COPY initdb/ /docker-entrypoint-initdb.d/

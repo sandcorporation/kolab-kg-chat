@@ -12,8 +12,8 @@ async def test_health_reports_db_and_extensions():
     body = response.json()
     assert body["status"] == "ok"
     assert body["db"]["connected"] is True
-    assert body["db"]["extensions"]["age"] is True
     assert body["db"]["extensions"]["vector"] is True
+    assert body["db"]["extensions"]["pg_trgm"] is True
 
 
 async def test_openapi_schema_exposed():

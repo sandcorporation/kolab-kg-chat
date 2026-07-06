@@ -49,50 +49,61 @@ def build_extractor(use_llm: bool = False):
 
 
 class IngestRunner:
-    def __init__(self, store, connector, extractor, embedder=None):
-        self._store = store
+    """C(소스 하이드레이션, ADR-0016): 상품 사실은 우리 DB에 복제하지 않는다.
+
+    적재는 상품마다 assemble → (설명 강화) 임베딩만 저장한다. kg_embedding이 '적재된 상품'
+    인덱스이자 content-hash 게이트가 된다(별도 상품/속성 테이블 없음). 속성은 임베딩 텍스트
+    구성에만 쓰고 저장하지 않는다 — 채팅 때 소스에서 재추출(ProductEnricher)한다.
+    """
+
+    def __init__(self, connector, extractor, embedder, describer=None):
         self._connector = connector
         self._extractor = extractor
-        self._embedder = embedder  # ADR-0012: 있으면 적재 시 임베딩(게이팅됨)
+        self._embedder = embedder     # EmbeddingStore: 임베딩 + content-hash 인덱스(필수)
+        self._describer = describer    # Route C: 있으면 임베딩 텍스트를 LLM 설명으로 강화
 
     async def apply(self, source_id: str, *, gate: bool = False) -> str:
         """한 상품을 현재 상태로 반영한다(멱등). 반환: created|updated|unchanged|deleted."""
         doc = await self._connector.assemble(source_id)
         if doc is None:
-            await self._store.delete_product(source_id)
+            await self._embedder.delete(source_id)
+            if self._describer is not None:
+                await self._describer.delete(source_id)
             return "deleted"
-        stored = await self._store.get_content_hash(source_id)
+        stored = await self._embedder.get_content_hash(source_id)
         if gate and stored == doc.content_hash:
             return "unchanged"  # content-hash 게이팅: 재추출·재임베딩 생략
-        await self._store.upsert_product(doc)
         result = await self._extractor.extract(doc)
-        await self._store.set_attributes(source_id, [asdict(a) for a in result.attributes])
-        if self._embedder is not None:
-            text = (doc.name + " " + " ".join(str(a.value) for a in result.attributes)).strip()
-            try:
-                await self._embedder.embed_product(source_id, doc.name, text)
-            except Exception:  # noqa: BLE001 — 임베딩 실패는 상품 적재를 막지 않는다
-                pass
+        values = " ".join(str(a.value) for a in result.attributes)
+        description = ""
+        if self._describer is not None:  # Route C: LLM 설명으로 강화(게이팅·폴백 내부처리)
+            attrs = [asdict(a) for a in result.attributes]
+            description = await self._describer.describe(
+                source_id, doc.name, attrs, doc.content_hash)
+        text = f"{doc.name} {values}".strip()
+        if description:
+            text = f"{text}\n{description}"
+        await self._embedder.embed_product(source_id, doc.name, text, doc.content_hash)
         return "updated" if stored is not None else "created"
 
     def _batch_size(self, batch_size: int | None) -> int:
         return batch_size or int(os.environ.get("INGEST_BATCH_SIZE", "500"))
 
     async def _flush(self, ids: list[str], counts: dict[str, int]) -> None:
-        # 배치 세션: PG 커넥션 1개 재사용 + 배치당 커밋(이슈 03/06)
-        async with self._store.batch():
-            for source_id in ids:
-                status = await self.apply(source_id)
-                counts[status] = counts.get(status, 0) + 1
+        for source_id in ids:
+            status = await self.apply(source_id)
+            counts[status] = counts.get(status, 0) + 1
 
     async def full_load(self, limit: int | None = None, batch_size: int | None = None) -> dict[str, int]:
-        """초기 전체 적재 — 키셋 스트리밍 + 배치 세션 + 배치당 커밋(대규모 확장, 이슈 06).
+        """초기 전체 적재 — 키셋 스트리밍 + 배치(대규모 확장, 이슈 06).
 
-        상품은 1건씩 처리·해제(순차)라 peak 메모리는 배치·1 doc으로 바운드된다.
+        상품은 1건씩 처리·해제(순차)라 peak 메모리는 1 doc으로 바운드된다.
         """
         size = self._batch_size(batch_size)
         counts: dict[str, int] = {}
-        await self._store.ensure_indexes()  # 대규모 조회/적재 필수(이슈 01)
+        await self._embedder.ensure_indexes()  # kg_embedding 테이블·검색 인덱스 선생성
+        if self._describer is not None:
+            await self._describer.ensure()
         async with self._connector.session():  # 소스 커넥션 1개 재사용(이슈 04)
             pending: list[str] = []
             async for source_id in self._connector.iter_product_ids(limit=limit):
@@ -105,25 +116,22 @@ class IngestRunner:
         return counts
 
     async def _apply_ids(self, ids: list[str], counts: dict[str, int]) -> None:
-        """변경 id 집합을 배치 세션으로 반영한다(커넥션 재사용 + 배치 커밋)."""
+        """변경 id 집합을 반영한다(소스 커넥션 재사용)."""
         if not ids:
             return
-        size = self._batch_size(None)
         async with self._connector.session():
-            for i in range(0, len(ids), size):
-                async with self._store.batch():
-                    for source_id in ids[i:i + size]:
-                        status = await self.apply(source_id, gate=True)
-                        counts[status] = counts.get(status, 0) + 1
+            for source_id in ids:
+                status = await self.apply(source_id, gate=True)
+                counts[status] = counts.get(status, 0) + 1
 
     async def sync_once(self, poller: DiffPoller | None = None) -> dict[str, int]:
         """전체 재조정 — 소스 스냅샷 대비 삭제·드리프트까지 보정한다(저빈도용).
 
-        안전장치: 그래프엔 상품이 있는데 소스 스냅샷이 비면(소스 장애/오설정 정황)
+        안전장치: 우리 DB엔 상품이 있는데 소스 스냅샷이 비면(소스 장애/오설정 정황)
         전량 삭제를 하지 않고 건너뛴다.
         """
         poller = poller or DiffPoller(self._connector)
-        previous = await self._store.content_hashes()
+        previous = await self._embedder.content_hashes()
         changes, current = await poller.poll(previous)
         if previous and not current:
             return {"skipped_empty_source": len(previous)}
