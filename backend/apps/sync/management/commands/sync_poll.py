@@ -50,11 +50,13 @@ class Command(BaseCommand):
             self.stdout.write("stopped.")
 
     async def _run(self, opts):
+        from apps.embeddings.describe import build_describer
         from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
 
         runner = IngestRunner(
             GraphStore(), YoungcartMySQLConnector.from_env(), build_extractor(opts["llm"]),
             embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # ADR-0012: 변경분 임베딩
+            describer=build_describer(),  # Route C: LLM 설명으로 임베딩 강화
         )
         cycle = 0
         every = opts["reconcile_every"]

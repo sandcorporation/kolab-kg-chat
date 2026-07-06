@@ -1,6 +1,6 @@
 # 이슈 02: IngestRunner 통합 + RAG_ENRICH 플래그
 
-Status: ready-for-agent
+Status: done — IngestRunner에 describer 주입, apply가 강화 텍스트(name+값+설명) 임베딩. ingest_products·sync_poll 항상 강화(플래그 없음). 테스트 2.
 Type: AFK
 Parent: .scratch/enriched-embeddings/PRD.md
 

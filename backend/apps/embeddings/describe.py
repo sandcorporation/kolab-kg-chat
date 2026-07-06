@@ -91,3 +91,16 @@ class ProductDescriber:
 
 def _fmt(attributes: list[dict]) -> str:
     return ", ".join(f"{a['name']}={a['value']}" for a in attributes) or "속성 없음"
+
+
+def build_describer(table: str = "kg_description") -> ProductDescriber:
+    """운영 ProductDescriber — ChatOpenAI + DescriptionStore."""
+    import os
+
+    from langchain_openai import ChatOpenAI
+
+    model = ChatOpenAI(
+        model=os.environ.get("RAG_DESCRIPTION_MODEL", os.environ.get("OPENAI_MODEL", "gpt-4o-mini")),
+        api_key=os.environ["OPEN_AI_KEY"], temperature=0,
+    )
+    return ProductDescriber(model, DescriptionStore(table=table))

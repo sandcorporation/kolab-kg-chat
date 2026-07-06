@@ -49,11 +49,12 @@ def build_extractor(use_llm: bool = False):
 
 
 class IngestRunner:
-    def __init__(self, store, connector, extractor, embedder=None):
+    def __init__(self, store, connector, extractor, embedder=None, describer=None):
         self._store = store
         self._connector = connector
         self._extractor = extractor
-        self._embedder = embedder  # ADR-0012: 있으면 적재 시 임베딩(게이팅됨)
+        self._embedder = embedder    # ADR-0012: 있으면 적재 시 임베딩(게이팅됨)
+        self._describer = describer   # Route C: 있으면 임베딩 텍스트를 LLM 설명으로 강화
 
     async def apply(self, source_id: str, *, gate: bool = False) -> str:
         """한 상품을 현재 상태로 반영한다(멱등). 반환: created|updated|unchanged|deleted."""
@@ -68,7 +69,15 @@ class IngestRunner:
         result = await self._extractor.extract(doc)
         await self._store.set_attributes(source_id, [asdict(a) for a in result.attributes])
         if self._embedder is not None:
-            text = (doc.name + " " + " ".join(str(a.value) for a in result.attributes)).strip()
+            values = " ".join(str(a.value) for a in result.attributes)
+            description = ""
+            if self._describer is not None:  # Route C: LLM 설명으로 강화(게이팅·폴백 내부처리)
+                attrs = [asdict(a) for a in result.attributes]
+                description = await self._describer.describe(
+                    source_id, doc.name, attrs, doc.content_hash)
+            text = f"{doc.name} {values}".strip()
+            if description:
+                text = f"{text}\n{description}"
             try:
                 await self._embedder.embed_product(source_id, doc.name, text)
             except Exception:  # noqa: BLE001 — 임베딩 실패는 상품 적재를 막지 않는다
