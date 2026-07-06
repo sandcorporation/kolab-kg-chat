@@ -23,17 +23,19 @@ class HybridRetriever:
         self._k = top_k or int(os.environ.get("RAG_TOP_K", "20"))
 
     async def retrieve(
-        self, keywords: list[str], semantic_query: str, k: int | None = None
+        self, keywords: list[str], semantic_query: str,
+        filters: dict | None = None, k: int | None = None,
     ) -> list[dict]:
         """분석된 검색어로 검색 → 합집합·중복제거·top-K + 설명 부착.
 
         키워드마다 keyword_search(한/영 각각, KO/EN 미스매치 보완) + 시맨틱 질의 1회.
+        filters(숫자 하드 필터)가 있으면 두 검색에 함께 건다(ADR-0018).
         """
         k = k or self._k
         hits: list[dict] = []
         for kw in keywords:
-            hits.extend(await self._keyword.keyword_search(kw, limit=k))
-        hits.extend(await self._semantic.search(semantic_query, k=k))
+            hits.extend(await self._keyword.keyword_search(kw, limit=k, filters=filters))
+        hits.extend(await self._semantic.search(semantic_query, k=k, filters=filters))
 
         seen: dict[str, dict] = {}
         for r in hits:  # 키워드 결과 먼저, 그다음 시맨틱

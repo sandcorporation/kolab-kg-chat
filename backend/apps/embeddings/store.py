@@ -9,10 +9,36 @@ from __future__ import annotations
 import hashlib
 
 from apps.core.db import connect
+from apps.embeddings.filters import FILTER_COLUMNS, FILTER_SPEC
 
 
 def _vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
+
+
+_KNOWN_FILTERS = {f.name for f in FILTER_SPEC}
+
+
+def _filter_where(filters: dict | None) -> tuple[str, list]:
+    """질의 필터 {name:(lo,hi)}(허용 범위) → 겹침 WHERE(ADR-0018).
+
+    이하(hi): col_min<=hi · 이상(lo): col_max>=lo · 범위[lo,hi]: 둘 다. NULL 컬럼은 자동 제외.
+    이름은 레지스트리로 검증(컬럼명 안전).
+    """
+    clauses: list[str] = []
+    params: list = []
+    for name, bounds in (filters or {}).items():
+        if name not in _KNOWN_FILTERS:
+            continue
+        lo, hi = bounds
+        if hi is not None:
+            clauses.append(f"{name}_min <= %s")
+            params.append(hi)
+        if lo is not None:
+            clauses.append(f"{name}_max >= %s")
+            params.append(lo)
+    where = ("".join(f" AND {c}" for c in clauses)) if clauses else ""
+    return where, params
 
 
 class FakeEmbeddingProvider:
@@ -61,6 +87,11 @@ class EmbeddingStore:
         await cur.execute(
             f"ALTER TABLE {self._table} ADD COLUMN IF NOT EXISTS content_hash text"
         )
+        # 숫자 하드 필터 컬럼(ADR-0018) — 레지스트리 기준 min/max, 기존 행은 NULL.
+        for col in FILTER_COLUMNS:
+            await cur.execute(
+                f"ALTER TABLE {self._table} ADD COLUMN IF NOT EXISTS {col} double precision"
+            )
 
     async def reset(self) -> None:
         conn = await self._connect()
@@ -96,10 +127,11 @@ class EmbeddingStore:
         except Exception:  # noqa: BLE001 — 인덱스는 성능 최적화일 뿐 필수 아님
             pass
 
-    async def keyword_search(self, query: str, limit: int = 10) -> list[dict]:
+    async def keyword_search(self, query: str, limit: int = 10, filters: dict | None = None) -> list[dict]:
         """상품명에 질의 토큰(OR·대소문자 무시)이 포함된 상품 — 시맨틱이 놓치는 정확어·코드 보완.
 
         토큰 OR 매칭: "유리 플라스크"가 "메스플라스크"(플라스크 포함)에도 걸리도록.
+        filters(숫자 하드 필터)가 있으면 함께 건다(ADR-0018).
         """
         model = self._provider.model_version
         tokens = [t for t in (query or "").lower().split() if t]
@@ -107,14 +139,15 @@ class EmbeddingStore:
             return []
         n = max(1, min(int(limit), 50))
         conds = " OR ".join(["name ILIKE %s"] * len(tokens))
-        params = (model, *[f"%{t}%" for t in tokens], n)
+        fwhere, fparams = _filter_where(filters)
+        params = (model, *[f"%{t}%" for t in tokens], *fparams, n)
         conn = await self._connect()
         try:
             async with conn.cursor() as cur:
                 await self._ensure(cur)
                 await cur.execute(
                     f"SELECT source_id, name FROM {self._table} "
-                    f"WHERE model=%s AND ({conds}) LIMIT %s",
+                    f"WHERE model=%s AND ({conds}){fwhere} LIMIT %s",
                     params,
                 )
                 rows = await cur.fetchall()
@@ -123,15 +156,22 @@ class EmbeddingStore:
         return [{"source_id": r[0], "name": r[1]} for r in rows]
 
     async def embed_product(
-        self, source_id: str, name: str, text: str, content_hash: str | None = None
+        self, source_id: str, name: str, text: str, content_hash: str | None = None,
+        filters: dict | None = None,
     ) -> bool:
         """상품 텍스트를 임베딩·저장한다. 같은 텍스트로 이미 캐시돼 있으면 False(스킵).
 
         content_hash는 소스 문서의 지문 — 적재 게이트·재조정에 쓰인다(C: kg_embedding이
-        '적재된 상품' 인덱스). 텍스트가 같아 재임베딩을 건너뛰어도 content_hash는 최신화한다.
+        '적재된 상품' 인덱스). filters는 숫자 하드 필터 값({이름:(min,max)}, ADR-0018). 텍스트가
+        같아 재임베딩을 건너뛰어도 content_hash·필터 컬럼은 최신화한다(소스에서 변할 수 있음).
         """
         model = self._provider.model_version
         text_hash = hashlib.sha256(f"{model}:{text}".encode("utf-8")).hexdigest()
+        fvals = {}
+        for f in FILTER_SPEC:  # 레지스트리 순서로 _min·_max 값
+            lo, hi = (filters or {}).get(f.name, (None, None))
+            fvals[f"{f.name}_min"] = lo
+            fvals[f"{f.name}_max"] = hi
         conn = await self._connect()
         try:
             async with conn.cursor() as cur:
@@ -141,23 +181,27 @@ class EmbeddingStore:
                     (source_id, model),
                 )
                 row = await cur.fetchone()
-                if row and row[0] == text_hash:
-                    if content_hash is not None:
-                        await cur.execute(
-                            f"UPDATE {self._table} SET content_hash=%s "
-                            "WHERE source_id=%s AND model=%s",
-                            (content_hash, source_id, model),
-                        )
+                if row and row[0] == text_hash:  # 재임베딩 스킵 — content_hash·필터만 갱신
+                    sets = ["content_hash=%s"] + [f"{c}=%s" for c in FILTER_COLUMNS]
+                    params = [content_hash] + [fvals[c] for c in FILTER_COLUMNS] + [source_id, model]
+                    await cur.execute(
+                        f"UPDATE {self._table} SET {', '.join(sets)} "
+                        "WHERE source_id=%s AND model=%s", params,
+                    )
                     return False
                 [vec] = await self._provider.embed([text])
+                fcols_sql = "".join(f", {c}" for c in FILTER_COLUMNS)
+                fplace = "".join(", %s" for _ in FILTER_COLUMNS)
+                fset = "".join(f", {c}=EXCLUDED.{c}" for c in FILTER_COLUMNS)
                 await cur.execute(
                     f"INSERT INTO {self._table} "
-                    "(source_id, name, model, text_hash, content_hash, embedding) "
-                    "VALUES (%s,%s,%s,%s,%s,%s::vector) "
+                    f"(source_id, name, model, text_hash, content_hash, embedding{fcols_sql}) "
+                    f"VALUES (%s,%s,%s,%s,%s,%s::vector{fplace}) "
                     "ON CONFLICT (source_id, model) DO UPDATE SET name=EXCLUDED.name, "
-                    "text_hash=EXCLUDED.text_hash, content_hash=EXCLUDED.content_hash, "
-                    "embedding=EXCLUDED.embedding",
-                    (source_id, name, model, text_hash, content_hash, _vec_literal(vec)),
+                    f"text_hash=EXCLUDED.text_hash, content_hash=EXCLUDED.content_hash, "
+                    f"embedding=EXCLUDED.embedding{fset}",
+                    (source_id, name, model, text_hash, content_hash, _vec_literal(vec),
+                     *[fvals[c] for c in FILTER_COLUMNS]),
                 )
         finally:
             await conn.close()
@@ -211,17 +255,18 @@ class EmbeddingStore:
         """대규모 적재 전 테이블·검색 인덱스 선생성(ensure의 별칭)."""
         await self.ensure()
 
-    async def search(self, query: str, k: int = 10) -> list[dict]:
+    async def search(self, query: str, k: int = 10, filters: dict | None = None) -> list[dict]:
         model = self._provider.model_version
         [qv] = await self._provider.embed([query])
+        fwhere, fparams = _filter_where(filters)  # 숫자 하드 필터 + 시맨틱 동시(ADR-0018)
         conn = await self._connect()
         try:
             async with conn.cursor() as cur:
                 await self._ensure(cur)
                 await cur.execute(
-                    f"SELECT source_id, name FROM {self._table} WHERE model=%s "
+                    f"SELECT source_id, name FROM {self._table} WHERE model=%s{fwhere} "
                     "ORDER BY embedding <-> %s::vector LIMIT %s",
-                    (model, _vec_literal(qv), k),
+                    (model, *fparams, _vec_literal(qv), k),
                 )
                 rows = await cur.fetchall()
         finally:
@@ -235,5 +280,5 @@ class SemanticSearch:
     def __init__(self, provider=None, table: str = "kg_embedding"):
         self._store = EmbeddingStore(provider or OpenAIEmbeddingProvider(), table=table)
 
-    async def search(self, keyword: str, k: int = 10) -> list[dict]:
-        return await self._store.search(keyword, k=k)
+    async def search(self, keyword: str, k: int = 10, filters: dict | None = None) -> list[dict]:
+        return await self._store.search(keyword, k=k, filters=filters)

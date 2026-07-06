@@ -90,7 +90,9 @@ class IngestRunner:
         text = f"{doc.name} {values}".strip()
         if description:
             text = f"{text}\n{description}"
-        await self._embedder.embed_product(source_id, doc.name, text, doc.content_hash)
+        from apps.embeddings.filters import extract_filters
+        await self._embedder.embed_product(
+            source_id, doc.name, text, doc.content_hash, filters=extract_filters(doc))
         return "updated" if stored is not None else "created"
 
     def _batch_size(self, batch_size: int | None) -> int:
