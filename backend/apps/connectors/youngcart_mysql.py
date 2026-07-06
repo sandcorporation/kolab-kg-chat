@@ -257,6 +257,45 @@ class YoungcartMySQLConnector:
             )
         return out
 
+    async def sample_diverse_ids(
+        self, keywords: list[str], per_keyword: int = 20, target: int = 400
+    ) -> list[str]:
+        """상품 유형 키워드로 계층 샘플링한 it_id 목록을 낸다.
+
+        카탈로그가 소수 대형 카테고리로 편향돼(예: 상위 3개가 83%) it_id 순 앞 N개나
+        단순 랜덤으로는 희소 유형(플라스크 0.4% 등)이 누락된다. 유형 키워드마다 상품명
+        LIKE로 몇 개씩 뽑아 다양한 유형이 고르게 들어가게 하고, 모자라면 랜덤으로 채운다.
+        """
+        ids: list[str] = []
+        seen: set[str] = set()
+        conn = await self._acquire()
+        try:
+            async with conn.cursor() as cur:
+                for kw in keywords:
+                    await cur.execute(
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_name LIKE %s "
+                        "ORDER BY RAND() LIMIT %s",
+                        (f"%{kw}%", max(1, per_keyword)),
+                    )
+                    for (sid,) in await cur.fetchall():
+                        if sid not in seen:
+                            seen.add(sid)
+                            ids.append(sid)
+                if len(ids) < target:  # 남는 자리는 랜덤으로 채워 넓이 확보
+                    await cur.execute(
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 ORDER BY RAND() LIMIT %s",
+                        ((target - len(ids)) * 3,),
+                    )
+                    for (sid,) in await cur.fetchall():
+                        if sid not in seen:
+                            seen.add(sid)
+                            ids.append(sid)
+                        if len(ids) >= target:
+                            break
+        finally:
+            self._release(conn)
+        return ids[:target]
+
     def _build_document(self, item, option_rows, field_by_catno) -> ProductDocument:
         base_price = item.get("it_price") or 0
         variants = []

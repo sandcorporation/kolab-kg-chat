@@ -74,3 +74,18 @@ async def test_assemble_many_omits_missing_and_empty():
     assert await c.assemble_many([]) == {}
     got = await c.assemble_many(["DLM-4", "does-not-exist"])
     assert set(got.keys()) == {"DLM-4"}
+
+
+async def test_sample_diverse_includes_keyword_matches_and_dedupes():
+    # 유형 키워드로 계층 샘플링 — flask는 Volumetric Flask를 포함하고, 나머지는 랜덤으로 채운다.
+    c = _connector()
+    ids = await c.sample_diverse_ids(["flask"], per_keyword=5, target=4)
+    assert "1548728629" in ids                 # Volumetric Flask가 flask 키워드로 포함
+    assert len(ids) == len(set(ids))           # 중복 없음
+    assert len(ids) <= 4                        # target 상한 준수
+
+
+async def test_sample_diverse_respects_target():
+    c = _connector()
+    ids = await c.sample_diverse_ids(["flask", "viscometer"], per_keyword=5, target=2)
+    assert len(ids) == 2
