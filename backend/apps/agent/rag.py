@@ -1,8 +1,9 @@
-"""RagRecommender (이슈 02) — retrieve-then-read 읽기 컴포넌트.
+"""RagRecommender (ADR-0017) — 에이전틱 반복 검색 읽기 컴포넌트.
 
-검색은 HybridRetriever가 결정적으로 하고(현재 질의만), LLM은 후보를 읽고 적합한 것을
-골라 근거를 쓴다(도구 호출·재검색 없음). 첫 줄 '선택: n, m'을 파싱해 추천 id를 포착하고
-그 줄은 토큰 스트림에서 suppress한다. astream/run 인터페이스는 기존과 동일.
+QueryAnalyzer로 라우팅(팔로업이면 검색 스킵)하고, 만족스러운 결과가 나올 때까지 최대 N회
+검색어를 바꿔가며 재시도한다. 만족 판정은 선택 단계를 재사용한다(`선택: 없음`=불만족 → 재검색).
+선택 응답을 스트리밍하며 첫 줄 '선택:'을 엿봐 만족이면 나머지 근거를 흘리고, 불만족이면 스트림을
+끊고(출력 토큰 절약) 재검색어를 생성해 재시도한다. astream/run 인터페이스는 기존과 동일.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ class AgentResult:
     rationale: str
     recommended_ids: list[str] = field(default_factory=list)
 
+
 RAG_PROMPT = (
     "당신은 실험·연구 장비 쇼핑몰(kolabshop)의 상품 추천 도우미입니다. "
     "아래 후보 상품 중 사용자 요청에 맞는 것을 고르세요. "
@@ -30,10 +32,16 @@ RAG_PROMPT = (
     "사용자가 특정 상품 유형을 지목하면(예: 플라스크·피펫·교반기), 후보 중 그 유형에 해당하는 "
     "상품만 고르세요. 재질·내열성 같은 속성만 겹치고 상품 유형이 다르면(예: 플라스크를 원하는데 "
     "합금·거치대·랙) 고르지 말고 '선택: 없음'으로 답하세요. "
-    "상품 URL·이미지·가격은 시스템이 붙이니 만들지 마세요. "
-    "이전 대화는 사용자가 이전 추천 상품을 가리킬 때만 참고하세요. "
-    "사용자가 화제를 바꾸거나 포괄적으로 물으면(예: '어떤 상품 있어?') 이전 주제를 "
-    "언급하지 말고 현재 후보로만 답하세요."
+    "상품 URL·이미지·가격은 시스템이 붙이니 만들지 마세요."
+)
+
+FOLLOWUP_PROMPT = (
+    "이전 대화를 바탕으로 사용자의 후속 질문에 한국어로 간결히 답하세요. "
+    "대화에 없는 상품 사실을 지어내지 마세요. 상품 URL·가격은 시스템이 관리합니다."
+)
+
+_FALLBACK = (
+    "관련 상품을 찾지 못했습니다. 찾으시는 용도나 다른 키워드를 알려주시면 다시 찾아드리겠습니다."
 )
 
 
@@ -50,9 +58,11 @@ def _fmt_desc(candidate: dict) -> str:
 
 
 class RagRecommender:
-    def __init__(self, model, retriever):
+    def __init__(self, model, retriever, analyzer, max_iters: int | None = None):
         self._model = model
         self._retriever = retriever
+        self._analyzer = analyzer
+        self._max_iters = max_iters or int(os.environ.get("AGENT_MAX_ITERS", "3"))
         budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
         self._trimmer = ContextTrimmer(budget, token_counter=model)
         self._history_turns = int(os.environ.get("AGENT_HISTORY_TURNS", "5"))
@@ -67,48 +77,98 @@ class RagRecommender:
         return self._trimmer.trim(msgs)
 
     async def astream(self, query: str, history=None):
-        """status(검색 중) → 근거 token → result. 첫 줄 '선택:'은 suppress."""
-        yield {"type": "status", "label": "검색 중…"}
-        candidates = await self._retriever.retrieve(query)  # 현재 질의만(강화 인덱스가 KO/EN 커버)
-        messages = self._messages(query, history, candidates)
+        """라우팅 → (팔로업 답변 | 반복 검색 루프). status·token·result 이벤트를 낸다."""
+        analysis = await self._analyzer.analyze(query, history)
+        if analysis.followup:  # 이전 상품 참조 → 검색 스킵, 대화 맥락으로 답
+            async for ev in self._answer_followup(query, history):
+                yield ev
+            return
 
-        header_done = False
-        buffer = ""
-        refs: list[int] = []
+        keywords, semantic = analysis.keywords, analysis.semantic
+        n = max(1, self._max_iters)
+        for i in range(n):
+            last = i == n - 1
+            yield {
+                "type": "status",
+                "label": "검색 중…" if i == 0 else f"다른 검색어로 다시 찾는 중… ({i + 1}/{n})",
+            }
+            candidates = await self._retriever.retrieve(keywords, semantic)
+
+            # 선택 스트림 + 첫 줄 '선택:' 엿보기. 만족이거나 마지막이면 근거를 흘리고,
+            # 불만족 & 잔여면 스트림을 끊어 재검색으로 넘어간다(출력 토큰 절약).
+            header_done = False
+            buffer = ""
+            refs: list[int] = []
+            emitted = False
+            async for chunk in self._model.astream(self._messages(query, history, candidates)):
+                content = getattr(chunk, "content", "") or ""
+                if not content:
+                    continue
+                if header_done:
+                    emitted = True
+                    yield {"type": "token", "content": content}
+                    continue
+                buffer += content
+                if "\n" in buffer:
+                    header, rest = buffer.split("\n", 1)
+                    refs = parse_selection(header)
+                    header_done = True
+                    if refs or last:  # 만족 or 마지막(모델 해명 살림) → 나머지 흘림
+                        rest = rest.lstrip("\n")
+                        if rest:
+                            emitted = True
+                            yield {"type": "token", "content": rest}
+                    else:  # 불만족 & 잔여 → 중단
+                        break
+            if not header_done and buffer.strip():  # 개행 없이 끝남
+                if buffer.strip().startswith("선택"):
+                    refs = parse_selection(buffer)
+                elif last:  # 형식 이탈이지만 마지막 → 통째로 근거
+                    emitted = True
+                    yield {"type": "token", "content": buffer}
+
+            if refs:  # 만족
+                recommended = [
+                    candidates[j - 1]["source_id"] for j in refs if 1 <= j <= len(candidates)
+                ]
+                if not emitted:
+                    yield {"type": "token", "content": (
+                        "요청에 맞는 상품을 아래에서 확인하세요." if recommended else _FALLBACK
+                    )}
+                yield {"type": "result", "recommended_ids": recommended}
+                return
+
+            if last:  # 마지막인데 불만족 → 모델 해명을 이미 흘렸으면 그대로, 없으면 폴백
+                if not emitted:
+                    yield {"type": "token", "content": _FALLBACK}
+                yield {"type": "result", "recommended_ids": []}
+                return
+
+            # 재검색어 생성(거부된 후보 학습) → 무진전이면 조기 종료
+            prev_terms = (keywords, semantic)
+            keywords, semantic = await self._analyzer.reformulate(
+                query, prev_terms, [c["name"] for c in candidates]
+            )
+            if (keywords, semantic) == prev_terms:
+                yield {"type": "token", "content": _FALLBACK}
+                yield {"type": "result", "recommended_ids": []}
+                return
+
+    async def _answer_followup(self, query, history):
+        messages = self._trimmer.trim([
+            SystemMessage(content=FOLLOWUP_PROMPT),
+            *history_to_messages(history, self._history_turns),
+            HumanMessage(content=query),
+        ])
         emitted = False
         async for chunk in self._model.astream(messages):
             content = getattr(chunk, "content", "") or ""
-            if not content:
-                continue
-            if header_done:
+            if content:
                 emitted = True
                 yield {"type": "token", "content": content}
-                continue
-            buffer += content
-            if "\n" in buffer:
-                header, rest = buffer.split("\n", 1)
-                refs = parse_selection(header)
-                header_done = True
-                rest = rest.lstrip("\n")
-                if rest:
-                    emitted = True
-                    yield {"type": "token", "content": rest}
-        if not header_done:  # 개행 없이 끝남
-            if buffer.strip().startswith("선택"):
-                refs = parse_selection(buffer)
-            elif buffer.strip():
-                emitted = True
-                yield {"type": "token", "content": buffer}  # 형식 이탈 → 전체를 근거로
-
-        recommended = [
-            candidates[i - 1]["source_id"] for i in refs if 1 <= i <= len(candidates)
-        ]
-        if not emitted:  # LLM이 근거를 안 남긴 경우 — 빈 말풍선 대신 안내한다
-            yield {"type": "token", "content": (
-                "요청에 맞는 상품을 아래에서 확인하세요." if recommended
-                else "관련 상품을 찾지 못했습니다. 찾으시는 용도나 다른 키워드를 알려주시면 다시 찾아드리겠습니다."
-            )}
-        yield {"type": "result", "recommended_ids": recommended}
+        if not emitted:
+            yield {"type": "token", "content": "이전 추천에 대해 궁금한 점을 구체적으로 물어봐 주세요."}
+        yield {"type": "result", "recommended_ids": []}
 
     async def run(self, query: str, history=None) -> AgentResult:
         rationale: list[str] = []
