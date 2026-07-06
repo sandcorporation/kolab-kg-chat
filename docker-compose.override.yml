@@ -52,17 +52,19 @@ services:
     ports:
       - "8001:8000" # 프론트 우회 직접 디버깅용(호스트 8001 → 컨테이너 8000)
     environment:
-      # dev는 번들 mock source-db를 가리킨다(.env의 SOURCE_DB_*보다 우선).
-      SOURCE_DB_HOST: source-db
+      # dev 서버는 real-source-db(628k 덤프)를 서빙한다 — 기존 kg_embedding 400개가 이 소스에서
+      # 적재됐으므로 채팅 하이드레이션이 맞아떨어진다(C: 적재 소스=채팅 소스, ADR-0016).
+      # 테스트는 backend/tests/conftest.py가 mock(source-db)으로 고정한다(결정성).
+      SOURCE_DB_HOST: real-source-db
       SOURCE_DB_PORT: "3306"
-      SOURCE_DB_USER: kolab
-      SOURCE_DB_PASSWORD: kolab
+      SOURCE_DB_USER: root
+      SOURCE_DB_PASSWORD: root
       SOURCE_DB_NAME: kolabshop
       AGENT_FAKE: ${AGENT_FAKE:-} # 1이면 OpenAI 없이 결정적 스크립트 에이전트(E2E/데모)
     depends_on:
       db:
         condition: service_healthy
-      source-db:
+      real-source-db:
         condition: service_healthy
 
 volumes:
