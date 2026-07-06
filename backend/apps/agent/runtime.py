@@ -65,6 +65,7 @@ def build_default_context() -> AgentContext:
     # RAG 읽기 경로: 키워드(name)∪시맨틱(임베딩) → LLM 읽기·선택. 질의이해·도구 루프 없음(ADR-0015).
     from langchain_openai import ChatOpenAI
 
+    from apps.agent.query_analyzer import QueryAnalyzer
     from apps.agent.rag import RagRecommender
     from apps.agent.retrieval import HybridRetriever
     from apps.embeddings.describe import DescriptionStore
@@ -76,5 +77,6 @@ def build_default_context() -> AgentContext:
     )
     keyword = EmbeddingStore(OpenAIEmbeddingProvider())  # keyword_search(name ILIKE)
     retriever = HybridRetriever(keyword, SemanticSearch(), DescriptionStore())
-    agent = RagRecommender(model, retriever)
+    analyzer = QueryAnalyzer(model)  # ADR-0017: 질의생성 복구 + 반복 루프 라우팅
+    agent = RagRecommender(model, retriever, analyzer)
     return AgentContext(agent=agent, enricher=enricher)

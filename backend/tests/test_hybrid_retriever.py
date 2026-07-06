@@ -34,7 +34,7 @@ async def test_union_dedup_keyword_first():
     kw = FakeKeyword([_p("a"), _p("b")])
     sem = FakeSemantic([_p("b"), _p("c")])
     desc = FakeDescriptions({"a": "유리 비커 설명"})
-    cands = await HybridRetriever(kw, sem, desc, top_k=10).retrieve("q")
+    cands = await HybridRetriever(kw, sem, desc, top_k=10).retrieve(["q"], "q")
 
     assert [c["source_id"] for c in cands] == ["a", "b", "c"]     # 키워드 먼저, b 중복 제거, 그 뒤 c
     assert cands[0]["description"] == "유리 비커 설명"                 # 설명 부착
@@ -43,7 +43,7 @@ async def test_union_dedup_keyword_first():
 
 async def test_top_k_truncates():
     kw = FakeKeyword([_p(str(i)) for i in range(30)])
-    cands = await HybridRetriever(kw, FakeSemantic([]), FakeDescriptions(), top_k=5).retrieve("q")
+    cands = await HybridRetriever(kw, FakeSemantic([]), FakeDescriptions(), top_k=5).retrieve(["q"], "q")
     assert len(cands) == 5
 
 
@@ -51,5 +51,5 @@ async def test_one_source_empty():
     # 키워드 0건이어도 시맨틱으로 후보 산출
     cands = await HybridRetriever(
         FakeKeyword([]), FakeSemantic([_p("x")]), FakeDescriptions(), top_k=10
-    ).retrieve("q")
+    ).retrieve([], "q")
     assert [c["source_id"] for c in cands] == ["x"]

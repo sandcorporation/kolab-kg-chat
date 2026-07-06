@@ -22,14 +22,21 @@ class HybridRetriever:
         self._descriptions = descriptions  # get_many(ids) → {source_id: description}
         self._k = top_k or int(os.environ.get("RAG_TOP_K", "20"))
 
-    async def retrieve(self, query: str, k: int | None = None) -> list[dict]:
-        """현재 질의로 키워드 ∪ 시맨틱 검색 → 합집합·중복제거·top-K + 설명 부착."""
+    async def retrieve(
+        self, keywords: list[str], semantic_query: str, k: int | None = None
+    ) -> list[dict]:
+        """분석된 검색어로 검색 → 합집합·중복제거·top-K + 설명 부착.
+
+        키워드마다 keyword_search(한/영 각각, KO/EN 미스매치 보완) + 시맨틱 질의 1회.
+        """
         k = k or self._k
-        keyword = await self._keyword.keyword_search(query, limit=k)
-        semantic = await self._semantic.search(query, k=k)
+        hits: list[dict] = []
+        for kw in keywords:
+            hits.extend(await self._keyword.keyword_search(kw, limit=k))
+        hits.extend(await self._semantic.search(semantic_query, k=k))
 
         seen: dict[str, dict] = {}
-        for r in [*keyword, *semantic]:  # 키워드 먼저, 그다음 시맨틱
+        for r in hits:  # 키워드 결과 먼저, 그다음 시맨틱
             sid = r["source_id"]
             if sid not in seen:
                 seen[sid] = r
