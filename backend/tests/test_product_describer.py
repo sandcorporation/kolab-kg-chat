@@ -42,6 +42,39 @@ async def test_unchanged_product_reuses_cache_without_llm():
     assert desc2 == "설명"
 
 
+class _RecordingModel(ScriptedChatModel):
+    last_human: str = ""
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.last_human = messages[-1].content
+        return await super()._agenerate(messages, stop, run_manager, **kwargs)
+
+
+async def test_describe_injects_pdf_text_into_prompt():
+    model = _RecordingModel(responses=[AIMessage(content="설명")])
+    store = await _store()
+    await ProductDescriber(model, store).describe(
+        "p1", "Flask", [], content_hash="h1", pdf_text="붕규산 유리 내열 스펙 250mL")
+    assert "문서 발췌" in model.last_human
+    assert "붕규산 유리 내열 스펙 250mL" in model.last_human
+
+
+async def test_describe_without_pdf_text_omits_excerpt():
+    model = _RecordingModel(responses=[AIMessage(content="설명")])
+    store = await _store()
+    await ProductDescriber(model, store).describe("p1", "Flask", [], content_hash="h1")
+    assert "문서 발췌" not in model.last_human
+
+
+async def test_is_current_reflects_cache():
+    store = await _store()
+    d = ProductDescriber(ScriptedChatModel(responses=[AIMessage(content="설명")]), store)
+    assert await d.is_current("p1", "h1") is False    # 저장 전
+    await d.describe("p1", "N", [], content_hash="h1")
+    assert await d.is_current("p1", "h1") is True      # 같은 hash → 최신
+    assert await d.is_current("p1", "h2") is False     # 다른 hash → 아님
+
+
 class _BoomModel(ScriptedChatModel):
     async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
         raise RuntimeError("boom")

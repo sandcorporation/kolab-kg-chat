@@ -12,14 +12,19 @@
     docker compose run --rm api python manage.py embed_products --sample-diverse --reset --limit 400
 """
 import asyncio
-from dataclasses import asdict
+import os
 
 from django.core.management.base import BaseCommand
 
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
 from apps.embeddings.describe import DescriptionStore, build_describer
 from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
-from apps.sync.runner import build_extractor
+from apps.extraction.pdf import build_pdf_extractor
+from apps.sync.runner import IngestRunner, build_extractor
+
+
+def _env_bool(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 # 실험·연구 장비 대표 상품 유형(상품명 영문 기준) — 다양성 샘플링용.
 LAB_TYPE_KEYWORDS = [
@@ -52,9 +57,9 @@ class Command(BaseCommand):
 
     async def _run(self, concurrency, limit, sample_diverse, reset):
         connector = YoungcartMySQLConnector.from_env()
-        extractor = build_extractor(use_llm=False)
         emb = EmbeddingStore(OpenAIEmbeddingProvider())
         describer = build_describer()
+        pdf_ex = build_pdf_extractor() if _env_bool("INGEST_PDF") else None
         if reset:  # 기존(편향) 샘플 제거 후 새로 채운다
             await emb.reset()
             await DescriptionStore().reset()
@@ -70,21 +75,17 @@ class Command(BaseCommand):
             async with connector.session():
                 ids = [sid async for sid in connector.iter_product_ids(limit=limit)]
 
+        # 적재 로직은 IngestRunner에 위임(assemble→추출→PDF 강화→설명→임베딩, 게이팅 포함).
+        runner = IngestRunner(
+            connector, build_extractor(use_llm=False),
+            embedder=emb, describer=describer, pdf_extractor=pdf_ex,
+        )
         sem = asyncio.Semaphore(concurrency)
 
         async def one(sid: str) -> bool:
             async with sem:
-                doc = await connector.assemble(sid)  # 세션 밖 → 자체 커넥션(동시 안전)
-                if doc is None:
-                    return False
-                result = await extractor.extract(doc)
-                values = " ".join(str(a.value) for a in result.attributes)
-                desc = await describer.describe(
-                    sid, doc.name, [asdict(a) for a in result.attributes], doc.content_hash)
-                text = f"{doc.name} {values}".strip()
-                if desc:
-                    text = f"{text}\n{desc}"
-                return await emb.embed_product(sid, doc.name, text, doc.content_hash)
+                status = await runner.apply(sid)  # 세션 밖 → 자체 커넥션(동시 안전)
+                return status in ("created", "updated")
 
         results: list[bool] = []
         step = concurrency * 4

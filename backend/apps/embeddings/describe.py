@@ -12,7 +12,8 @@ from apps.core.db import connect
 
 DESCRIBE_PROMPT = (
     "이 실험·연구 장비 상품의 유형과 용도를 한국어와 영어로 각각 한 줄로 설명하고, "
-    "검색에 쓸 한/영 키워드를 나열하라. 3줄 이내, 군더더기 없이."
+    "검색에 쓸 한/영 키워드를 나열하라. 3줄 이내, 군더더기 없이. "
+    "문서 발췌가 주어지면 그 스펙·용도를 설명·키워드에 반영하라."
 )
 
 
@@ -120,14 +121,25 @@ class ProductDescriber:
     async def delete(self, source_id: str) -> None:
         await self._store.delete(source_id)
 
-    async def describe(self, source_id: str, name: str, attributes: list[dict], content_hash: str) -> str:
+    async def is_current(self, source_id: str, content_hash: str) -> bool:
+        """이미 이 content_hash로 설명이 저장돼 있으면 True(러너의 PDF fetch 게이트용)."""
+        cached_hash, cached = await self._store.get(source_id)
+        return cached_hash == content_hash and cached is not None
+
+    async def describe(
+        self, source_id: str, name: str, attributes: list[dict],
+        content_hash: str, pdf_text: str = "",
+    ) -> str:
         cached_hash, cached = await self._store.get(source_id)
         if cached_hash == content_hash and cached is not None:
             return cached                            # content-hash 게이팅: 재호출 없음
+        human = f"상품명: {name}\n속성: {_fmt(attributes)}"
+        if pdf_text:  # PDF 문서 강화: LLM이 스펙을 한/영으로 증류(원문은 임베딩에 직접 안 들어감)
+            human += f"\n문서 발췌: {pdf_text}"
         try:
             resp = await self._model.ainvoke([
                 SystemMessage(content=DESCRIBE_PROMPT),
-                HumanMessage(content=f"상품명: {name}\n속성: {_fmt(attributes)}"),
+                HumanMessage(content=human),
             ])
             desc = getattr(resp, "content", "") or ""
         except Exception:  # noqa: BLE001 — 설명 생성 실패는 적재를 막지 않는다(폴백)

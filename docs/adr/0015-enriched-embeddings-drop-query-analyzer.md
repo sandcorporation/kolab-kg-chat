@@ -30,3 +30,7 @@ embed-chat(GraphRAG)의 원리를 이식한다 — **지능을 질의 시점이 
 - 신규 테이블 `kg_description`(source_id → content_hash, description) — 설명↔임베딩 분리(모델 교체 시 재임베딩만).
 - 원칙 유지: 임베딩은 **검색 리콜용**, 추천 카드의 그라운딩·가격·URL은 계속 **결정적** 부착(ADR-0001) — LLM이 상품 사실을 지어내지 않는다.
 - 판정관 채점 A/B(강화 vs 현행 ± 분석기)는 recall→최종 품질 확증용 후속(권장).
+- **(확장) PDF 문서 강화(옵션, `INGEST_PDF`)**: 상품 행의 직접-PDF URL을 적재 시 읽어(pypdf) 그
+  스펙 텍스트를 설명 생성 프롬프트에 넣는다 — 지능을 적재 시점으로 더 앞당김. content_hash에
+  pdf_url 포함(비면 무영향)·`is_current` fetch 게이트로 재처리 최소화. PDF 교체는 URL 변경으로
+  감지. 상세: `.scratch/pdf-doc-enrichment/PRD.md`.

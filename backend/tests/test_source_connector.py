@@ -89,3 +89,20 @@ async def test_sample_diverse_respects_target():
     c = _connector()
     ids = await c.sample_diverse_ids(["flask", "viscometer"], per_keyword=5, target=2)
     assert len(ids) == 2
+
+
+async def test_content_hash_pdf_url_is_backward_compatible():
+    # pdf_url 없는(빈) 상품은 기존 해시와 바이트 동일 → 재처리 0. 있으면 달라짐.
+    from apps.connectors.youngcart_mysql import _content_hash
+
+    base = _content_hash("N", "B", [], "", [], [])
+    same = _content_hash("N", "B", [], "", [], [], "")
+    diff = _content_hash("N", "B", [], "", [], [], "http://x/spec.pdf")
+    assert same == base            # 빈 pdf_url → 하위호환(캐시 유지)
+    assert diff != base            # pdf_url 존재 → 재처리 유도
+
+
+async def test_assembled_product_has_empty_pdf_url_without_column():
+    # mock 소스엔 it_pdf_url 컬럼이 없으므로 pdf_url은 ""(해시 불변)
+    doc = await _connector().assemble("1548728629")
+    assert doc.pdf_url == ""

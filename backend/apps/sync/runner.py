@@ -56,11 +56,12 @@ class IngestRunner:
     구성에만 쓰고 저장하지 않는다 — 채팅 때 소스에서 재추출(ProductEnricher)한다.
     """
 
-    def __init__(self, connector, extractor, embedder, describer=None):
+    def __init__(self, connector, extractor, embedder, describer=None, pdf_extractor=None):
         self._connector = connector
         self._extractor = extractor
         self._embedder = embedder     # EmbeddingStore: 임베딩 + content-hash 인덱스(필수)
         self._describer = describer    # Route C: 있으면 임베딩 텍스트를 LLM 설명으로 강화
+        self._pdf_extractor = pdf_extractor  # 있으면 상품 PDF를 읽어 설명을 강화(INGEST_PDF)
 
     async def apply(self, source_id: str, *, gate: bool = False) -> str:
         """한 상품을 현재 상태로 반영한다(멱등). 반환: created|updated|unchanged|deleted."""
@@ -77,9 +78,15 @@ class IngestRunner:
         values = " ".join(str(a.value) for a in result.attributes)
         description = ""
         if self._describer is not None:  # Route C: LLM 설명으로 강화(게이팅·폴백 내부처리)
+            pdf_text = ""
+            pdf_url = getattr(doc, "pdf_url", "")
+            if (self._pdf_extractor is not None and pdf_url
+                    and not await self._describer.is_current(source_id, doc.content_hash)):
+                # PDF 문서 강화: 이미 최신 설명이면 fetch 스킵(설명 캐시를 게이트로 재사용)
+                pdf_text = await self._pdf_extractor.extract(pdf_url)
             attrs = [asdict(a) for a in result.attributes]
             description = await self._describer.describe(
-                source_id, doc.name, attrs, doc.content_hash)
+                source_id, doc.name, attrs, doc.content_hash, pdf_text=pdf_text)
         text = f"{doc.name} {values}".strip()
         if description:
             text = f"{text}\n{description}"

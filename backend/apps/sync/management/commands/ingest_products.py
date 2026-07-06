@@ -39,10 +39,13 @@ class Command(BaseCommand):
     async def _run(self, limit, batch_size, use_llm):
         from apps.embeddings.describe import build_describer
         from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider
+        from apps.extraction.pdf import build_pdf_extractor
 
+        pdf_ex = build_pdf_extractor() if _env_bool("INGEST_PDF") else None
         runner = IngestRunner(
             YoungcartMySQLConnector.from_env(), build_extractor(use_llm),
             embedder=EmbeddingStore(OpenAIEmbeddingProvider()),  # 임베딩 + content-hash 인덱스
             describer=build_describer(),  # Route C: LLM 설명으로 임베딩 강화
+            pdf_extractor=pdf_ex,         # INGEST_PDF면 상품 PDF로 설명 강화
         )
         return await runner.full_load(limit=limit, batch_size=batch_size)
