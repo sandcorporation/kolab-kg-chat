@@ -106,3 +106,15 @@ async def test_assembled_product_has_empty_pdf_url_without_column():
     # mock 소스엔 it_pdf_url 컬럼이 없으므로 pdf_url은 ""(해시 불변)
     doc = await _connector().assemble("1548728629")
     assert doc.pdf_url == ""
+
+
+async def test_sample_by_category_all_when_under_cap():
+    # 카테고리 20(1)·30(2)·40(1) 각 ≤3 → 전부 포함
+    ids = await _connector().sample_by_category_ids(per_category=3)
+    assert set(ids) == {"1548728629", "1667982841", "1712107033", "DLM-4"}
+
+
+async def test_sample_by_category_caps_per_category():
+    # 카테고리당 1개 → 3개(ca_id 30은 it_id 작은 1667982841)
+    ids = await _connector().sample_by_category_ids(per_category=1)
+    assert set(ids) == {"1548728629", "1667982841", "DLM-4"}

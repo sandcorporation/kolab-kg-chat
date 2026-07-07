@@ -303,6 +303,30 @@ class YoungcartMySQLConnector:
             self._release(conn)
         return ids[:target]
 
+    async def sample_by_category_ids(
+        self, per_category: int = 3, category_field: str = "ca_id"
+    ) -> list[str]:
+        """세부카테고리(ca_id)마다 최대 per_category개를 뽑아 **모든 카테고리를 대표**한다.
+
+        키워드 샘플(sample_diverse_ids)과 달리 카탈로그 전 유형이 빠짐없이 포함된다 —
+        희소 유형(동물케이지 등)도 자기 카테고리에서 뽑히므로 커버리지 공백이 없다.
+        윈도우 함수로 카테고리별 상위 N행만 취한다(it_id 순, 결정적).
+        """
+        assert category_field.replace("_", "").isalnum(), "category_field must be safe identifier"
+        conn = await self._acquire()
+        try:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT it_id FROM (SELECT it_id, ROW_NUMBER() OVER "
+                    f"(PARTITION BY {category_field} ORDER BY it_id) rn "
+                    "FROM g5_shop_item WHERE it_use=1) t WHERE rn <= %s",
+                    (max(1, per_category),),
+                )
+                rows = await cur.fetchall()
+        finally:
+            self._release(conn)
+        return [r[0] for r in rows]
+
     def _build_document(self, item, option_rows, field_by_catno) -> ProductDocument:
         base_price = item.get("it_price") or 0
         variants = []

@@ -49,17 +49,22 @@ class Command(BaseCommand):
             help="유형 키워드 계층 샘플링(다양한 유형 커버). --limit이 목표 개수(기본 400).",
         )
         parser.add_argument(
+            "--by-category", action="store_true",
+            help="세부카테고리(ca_id)마다 --per-category개씩 — 모든 카테고리 완전 커버(커버리지 공백 없음).",
+        )
+        parser.add_argument("--per-category", type=int, default=3)
+        parser.add_argument(
             "--reset", action="store_true", help="적재 전 임베딩·설명 테이블을 비운다.",
         )
 
     def handle(self, *args, **options):
         new, total = asyncio.run(self._run(
-            options["concurrency"], options["limit"],
-            options["sample_diverse"], options["reset"],
+            options["concurrency"], options["limit"], options["sample_diverse"],
+            options["reset"], options["by_category"], options["per_category"],
         ))
         self.stdout.write(self.style.SUCCESS(f"enriched-embedded {new} new / {total} products"))
 
-    async def _run(self, concurrency, limit, sample_diverse, reset):
+    async def _run(self, concurrency, limit, sample_diverse, reset, by_category=False, per_category=3):
         connector = YoungcartMySQLConnector.from_env()
         emb = EmbeddingStore(OpenAIEmbeddingProvider())
         describer = build_describer()
@@ -70,8 +75,10 @@ class Command(BaseCommand):
         await emb.ensure()        # 동시 백필 전 테이블·인덱스 선생성(CREATE TABLE 레이스 방지)
         await describer.ensure()
 
-        # id 수집: 다양성 샘플링이면 유형 키워드 계층 샘플, 아니면 세션 스트리밍.
-        if sample_diverse:
+        # id 수집: 카테고리 계층(완전 커버) > 키워드 다양성 > 세션 스트리밍.
+        if by_category:
+            ids = await connector.sample_by_category_ids(per_category)
+        elif sample_diverse:
             target = limit or 400
             per_kw = max(5, target // len(LAB_TYPE_KEYWORDS))
             ids = await connector.sample_diverse_ids(LAB_TYPE_KEYWORDS, per_kw, target)
