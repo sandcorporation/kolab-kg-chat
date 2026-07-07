@@ -209,7 +209,9 @@ class YoungcartMySQLConnector:
                     return None
                 await cur.execute(
                     "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price "
-                    "FROM g5_shop_item_option WHERE it_id = %s AND io_use = 1 ORDER BY io_no",
+                    # io_type=0 = 기본 변형만. io_type=1(교정성적서 등 부가옵션)은 가격 왜곡 → 제외.
+                    "FROM g5_shop_item_option WHERE it_id = %s AND io_use = 1 AND io_type = 0 "
+                    "ORDER BY io_no",
                     (source_id,),
                 )
                 option_rows = await cur.fetchall()
@@ -246,8 +248,9 @@ class YoungcartMySQLConnector:
                 items = await cur.fetchall()
                 await cur.execute(
                     "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, it_id "
+                    # io_type=0 = 기본 변형만(부가옵션 제외 — assemble과 동일).
                     f"FROM g5_shop_item_option WHERE it_id IN ({placeholders}) AND io_use = 1 "
-                    "ORDER BY it_id, io_no",
+                    "AND io_type = 0 ORDER BY it_id, io_no",
                     tuple(ids),
                 )
                 option_rows = await cur.fetchall()

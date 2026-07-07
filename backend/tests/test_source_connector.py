@@ -17,6 +17,14 @@ async def test_assemble_flask_has_19_variants():
     assert len(doc.variants) == 19
 
 
+async def test_assemble_excludes_addon_options():
+    # io_type=1 부가옵션(교정성적서 5000원)은 변형·최저가에서 제외 — 최저가는 실제 변형가여야.
+    doc = await _connector().assemble("1548728629")
+    catnos = {v.raw.get("catalog_number") for v in doc.variants}
+    assert "CAL-CERT" not in catnos                        # 부가옵션은 변형이 아님
+    assert min(v.price for v in doc.variants) == 13400      # 성적서 5000이 최저가로 안 튐
+
+
 async def test_variant_price_is_absolute():
     doc = await _connector().assemble("1667982841")  # 점도계
     prices = {v.raw["catalog_number"]: v.price for v in doc.variants}

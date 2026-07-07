@@ -48,6 +48,11 @@ INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit
   ('1548728629', '18', '013.01.905', '5000ml, NS 34/35', 'EA', 257500),
   ('1548728629', '19', '013.01.910', '10000ml, NS 45/40', 'EA', 435900);
 
+-- 부가옵션(io_type=1, 교정성적서) — io_type=0 필터로 변형·최저가에서 제외되어야 함
+-- (실사례 1515660121: 성적서 5만원이 최저가로 튀던 버그 재현). 최저가는 13400이어야.
+INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit, io_price, io_type) VALUES
+  ('1548728629', '90', 'CAL-CERT', '교정성적서 질량 교정', 'EA', 5000, 1);
+
 -- 점도계 구성 2 (functional)
 INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit, io_price) VALUES
   ('1667982841', '1', 'ATAGO6840', 'VISCO B (L) 본체', 'EA', 3630000),
