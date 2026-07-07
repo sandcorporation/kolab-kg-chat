@@ -67,6 +67,7 @@ def build_default_context() -> AgentContext:
 
     from apps.agent.query_analyzer import QueryAnalyzer
     from apps.agent.rag import RagRecommender
+    from apps.agent.rerank import LLMReranker
     from apps.agent.retrieval import HybridRetriever
     from apps.embeddings.describe import DescriptionStore
     from apps.embeddings.store import EmbeddingStore, OpenAIEmbeddingProvider, SemanticSearch
@@ -78,5 +79,6 @@ def build_default_context() -> AgentContext:
     keyword = EmbeddingStore(OpenAIEmbeddingProvider())  # keyword_search(name ILIKE)
     retriever = HybridRetriever(keyword, SemanticSearch(), DescriptionStore())
     analyzer = QueryAnalyzer(model)  # ADR-0017: 질의생성 복구 + 반복 루프 라우팅
-    agent = RagRecommender(model, retriever, analyzer)
+    reranker = LLMReranker(model)    # ADR-0019: 리랭커 주도(≥임계·top-K), 선택 LLM 강등
+    agent = RagRecommender(model, retriever, analyzer, reranker=reranker)
     return AgentContext(agent=agent, enricher=enricher)
