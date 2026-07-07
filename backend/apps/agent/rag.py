@@ -64,10 +64,11 @@ def _fmt_desc(candidate: dict) -> str:
 
 
 class RagRecommender:
-    def __init__(self, model, retriever, analyzer, max_iters: int | None = None):
+    def __init__(self, model, retriever, analyzer, reranker=None, max_iters: int | None = None):
         self._model = model
         self._retriever = retriever
         self._analyzer = analyzer
+        self._reranker = reranker  # None이면 리랭크 스킵(하위호환); 있으면 리랭커 주도(ADR-0019)
         self._max_iters = max_iters or int(os.environ.get("AGENT_MAX_ITERS", "3"))
         budget = int(os.environ.get("AGENT_TOKEN_BUDGET", "6000"))
         self._trimmer = ContextTrimmer(budget, token_counter=model)
@@ -99,45 +100,51 @@ class RagRecommender:
                 "type": "status",
                 "label": "검색 중…" if i == 0 else f"다른 검색어로 다시 찾는 중… ({i + 1}/{n})",
             }
-            candidates = await self._retriever.retrieve(keywords, semantic, filters=filters)
-            if not candidates and filters:  # 필터-범인 감지: 필터 빼면 결과 있나?
+            retrieved = await self._retriever.retrieve(keywords, semantic, filters=filters)
+            if not retrieved and filters:  # 필터-범인 감지: 필터 빼면 결과 있나?
                 if await self._retriever.retrieve(keywords, semantic, filters=None):
                     yield {"type": "token", "content": _FILTER_FALLBACK}
                     yield {"type": "result", "recommended_ids": []}
                     return
+            # 리랭커 주도(ADR-0019): 검색은 리콜 위주로 넓게, 리랭커가 ≥임계·top-K로 컷.
+            # 통과 후보가 없으면 선택을 건너뛰고 바로 재검색(불만족과 동일 경로).
+            candidates = retrieved
+            if self._reranker is not None and retrieved:
+                candidates = await self._reranker.rerank(query, retrieved)
 
-            # 선택 스트림 + 첫 줄 '선택:' 엿보기. 만족이거나 마지막이면 근거를 흘리고,
-            # 불만족 & 잔여면 스트림을 끊어 재검색으로 넘어간다(출력 토큰 절약).
+            # 선택 스트림 + 첫 줄 '선택:' 엿보기(리랭크 통과 후보에 한해). 만족이거나 마지막이면
+            # 근거를 흘리고, 불만족 & 잔여면 스트림을 끊어 재검색으로 넘어간다(출력 토큰 절약).
             header_done = False
             buffer = ""
             refs: list[int] = []
             emitted = False
-            async for chunk in self._model.astream(self._messages(query, history, candidates)):
-                content = getattr(chunk, "content", "") or ""
-                if not content:
-                    continue
-                if header_done:
-                    emitted = True
-                    yield {"type": "token", "content": content}
-                    continue
-                buffer += content
-                if "\n" in buffer:
-                    header, rest = buffer.split("\n", 1)
-                    refs = parse_selection(header)
-                    header_done = True
-                    if refs or last:  # 만족 or 마지막(모델 해명 살림) → 나머지 흘림
-                        rest = rest.lstrip("\n")
-                        if rest:
-                            emitted = True
-                            yield {"type": "token", "content": rest}
-                    else:  # 불만족 & 잔여 → 중단
-                        break
-            if not header_done and buffer.strip():  # 개행 없이 끝남
-                if buffer.strip().startswith("선택"):
-                    refs = parse_selection(buffer)
-                elif last:  # 형식 이탈이지만 마지막 → 통째로 근거
-                    emitted = True
-                    yield {"type": "token", "content": buffer}
+            if candidates:
+                async for chunk in self._model.astream(self._messages(query, history, candidates)):
+                    content = getattr(chunk, "content", "") or ""
+                    if not content:
+                        continue
+                    if header_done:
+                        emitted = True
+                        yield {"type": "token", "content": content}
+                        continue
+                    buffer += content
+                    if "\n" in buffer:
+                        header, rest = buffer.split("\n", 1)
+                        refs = parse_selection(header)
+                        header_done = True
+                        if refs or last:  # 만족 or 마지막(모델 해명 살림) → 나머지 흘림
+                            rest = rest.lstrip("\n")
+                            if rest:
+                                emitted = True
+                                yield {"type": "token", "content": rest}
+                        else:  # 불만족 & 잔여 → 중단
+                            break
+                if not header_done and buffer.strip():  # 개행 없이 끝남
+                    if buffer.strip().startswith("선택"):
+                        refs = parse_selection(buffer)
+                    elif last:  # 형식 이탈이지만 마지막 → 통째로 근거
+                        emitted = True
+                        yield {"type": "token", "content": buffer}
 
             if refs:  # 만족
                 recommended = [
@@ -156,10 +163,10 @@ class RagRecommender:
                 yield {"type": "result", "recommended_ids": []}
                 return
 
-            # 재검색어 생성(거부된 후보 학습) → 무진전이면 조기 종료
+            # 재검색어 생성(거부된 후보 학습 — 리랭크 전 검색 결과 기준) → 무진전이면 조기 종료
             prev_terms = (keywords, semantic)
             keywords, semantic = await self._analyzer.reformulate(
-                query, prev_terms, [c["name"] for c in candidates]
+                query, prev_terms, [c["name"] for c in retrieved]
             )
             if (keywords, semantic) == prev_terms:
                 yield {"type": "token", "content": _FALLBACK}

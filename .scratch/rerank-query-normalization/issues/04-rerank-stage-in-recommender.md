@@ -1,6 +1,6 @@
 # 04 — RagRecommender 리랭크 스테이지 (리랭커 주도)
 
-Status: ready-for-agent
+Status: done
 
 ## Parent
 

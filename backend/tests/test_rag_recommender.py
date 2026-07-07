@@ -55,6 +55,43 @@ def _rec(model, retriever, analyzer, max_iters=3):
     return RagRecommender(model, retriever, analyzer, max_iters=max_iters)
 
 
+class FakeReranker:
+    """호출 순서대로 정한 리랭크 결과(통과 후보)를 낸다. 미지정이면 입력 그대로(identity)."""
+    def __init__(self, *result_sets):
+        self._sets = list(result_sets)
+        self.calls: list[list] = []
+
+    async def rerank(self, query, candidates):
+        self.calls.append(candidates)
+        if not self._sets:
+            return candidates
+        return self._sets[min(len(self.calls) - 1, len(self._sets) - 1)]
+
+
+async def test_reranker_drives_candidate_set():
+    # 리랭커가 후보를 걸러내면 선택은 그 걸러진 집합에서만 고른다(리랭커 주도).
+    retrieved = [CANDS[0], CANDS[1]]                 # 검색은 2개
+    reranker = FakeReranker([CANDS[1]])              # 리랭커가 p2만 통과
+    model = ScriptedChatModel(responses=[AIMessage(content="선택: 1\n적합합니다")])
+    rec = RagRecommender(model, FakeRetriever(retrieved), FakeAnalyzer(),
+                         reranker=reranker, max_iters=1)
+    res = await rec.run("집게")
+    assert res.recommended_ids == ["p2"]             # 리랭커 통과분에서만 선택(아니면 1548728629)
+    assert reranker.calls[0] == retrieved            # 리랭커는 검색 결과 전체를 받음
+
+
+async def test_retry_when_reranker_yields_nothing():
+    # 1차 리랭크가 ≥임계 후보 0 → 재검색, 2차 리랭크가 후보 냄 → 그걸 추천.
+    reranker = FakeReranker([], [CANDS[0]])          # 1차 [], 2차 [flask]
+    analyzer = FakeAnalyzer(reformulations=[(["k2"], "s2")])
+    model = ScriptedChatModel(responses=[AIMessage(content="선택: 1\n적합")])  # 2차에만 호출
+    rec = RagRecommender(model, FakeRetriever([CANDS[0], CANDS[1]]), analyzer,
+                         reranker=reranker, max_iters=2)
+    res = await rec.run("집게")
+    assert res.recommended_ids == ["1548728629"]     # 2차 리랭크 후보
+    assert analyzer.reformulate_calls                 # 재정식화가 일어남
+
+
 def _tokens(events):
     return "".join(e["content"] for e in events if e["type"] == "token")
 
