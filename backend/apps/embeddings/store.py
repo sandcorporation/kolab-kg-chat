@@ -18,6 +18,17 @@ def _vec_literal(vec: list[float]) -> str:
 
 _KNOWN_FILTERS = {f.name for f in FILTER_SPEC}
 
+# 검색 결과에 레지스트리 값(가격·순도·분자량·보관온도)을 함께 실어 리랭커가 숫자 판별을 하도록.
+_SEARCH_COLS = "source_id, name" + "".join(f", {c}" for c in FILTER_COLUMNS)
+
+
+def _hit(row) -> dict:
+    """검색 행 → 후보 dict(레지스트리 값 포함, 없으면 None)."""
+    return {
+        "source_id": row[0], "name": row[1],
+        **{c: row[2 + i] for i, c in enumerate(FILTER_COLUMNS)},
+    }
+
 
 def _filter_where(filters: dict | None) -> tuple[str, list]:
     """질의 필터 {name:(lo,hi)}(허용 범위) → 겹침 WHERE(ADR-0018).
@@ -193,14 +204,14 @@ class EmbeddingStore:
             async with conn.cursor() as cur:
                 await self._ensure(cur)
                 await cur.execute(
-                    f"SELECT source_id, name FROM {self._table} "
+                    f"SELECT {_SEARCH_COLS} FROM {self._table} "
                     f"WHERE model=%s AND ({conds}){fwhere} LIMIT %s",
                     params,
                 )
                 rows = await cur.fetchall()
         finally:
             await conn.close()
-        return [{"source_id": r[0], "name": r[1]} for r in rows]
+        return [_hit(r) for r in rows]
 
     async def embed_product(
         self, source_id: str, name: str, text: str, content_hash: str | None = None,
@@ -311,14 +322,14 @@ class EmbeddingStore:
             async with conn.cursor() as cur:
                 await self._ensure(cur)
                 await cur.execute(
-                    f"SELECT source_id, name FROM {self._table} WHERE model=%s{fwhere} "
+                    f"SELECT {_SEARCH_COLS} FROM {self._table} WHERE model=%s{fwhere} "
                     "ORDER BY embedding <-> %s::vector LIMIT %s",
                     (model, *fparams, _vec_literal(qv), k),
                 )
                 rows = await cur.fetchall()
         finally:
             await conn.close()
-        return [{"source_id": r[0], "name": r[1]} for r in rows]
+        return [_hit(r) for r in rows]
 
 
 class SemanticSearch:

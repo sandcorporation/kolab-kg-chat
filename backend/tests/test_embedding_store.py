@@ -13,6 +13,16 @@ async def test_search_returns_nearest_by_similarity():
     assert hits[0]["source_id"] == "p1"
 
 
+async def test_search_returns_registry_values():
+    # 검색 결과가 레지스트리 컬럼(가격 등)을 실어와 리랭커가 볼 수 있도록. 값 없으면 None.
+    store = EmbeddingStore(FakeEmbeddingProvider(dim=8), table="kg_embedding_test")
+    await store.reset()
+    await store.embed_product("p1", "시약", "고순도 시약", filters={"price": (1000.0, 2000.0)})
+    hits = await store.search("고순도 시약", k=1)
+    assert hits[0]["price_min"] == 1000.0 and hits[0]["price_max"] == 2000.0
+    assert hits[0]["purity_min"] is None
+
+
 async def test_embed_product_is_cached():
     class CountingProvider(FakeEmbeddingProvider):
         def __init__(self):

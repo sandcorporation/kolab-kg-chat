@@ -1,6 +1,6 @@
 # 02 — 후보에 레지스트리 값 부착 + 검색 폭 50
 
-Status: ready-for-agent
+Status: done
 
 ## Parent
 

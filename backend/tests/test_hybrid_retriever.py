@@ -64,3 +64,12 @@ async def test_retrieve_threads_filters_to_both():
     flt = {"price": (None, 30000000.0)}
     await HybridRetriever(kw, sem, FakeDescriptions(), top_k=10).retrieve(["k"], "q", filters=flt)
     assert kw.filters == flt and sem.filters == flt   # 두 검색에 동일 필터 전달
+
+
+async def test_retrieve_carries_registry_values():
+    # 검색 히트의 레지스트리 값(가격 등)이 후보에 실려 리랭커가 숫자 판별을 하도록. 없는 값은 None.
+    hit = {"source_id": "a", "name": "A", "price_min": 1000.0, "price_max": 2000.0}
+    kw = FakeKeyword([hit])
+    cands = await HybridRetriever(kw, FakeSemantic([]), FakeDescriptions(), top_k=10).retrieve(["q"], "q")
+    assert cands[0]["price_min"] == 1000.0 and cands[0]["price_max"] == 2000.0
+    assert cands[0]["purity_min"] is None

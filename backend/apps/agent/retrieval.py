@@ -14,13 +14,16 @@ from __future__ import annotations
 
 import os
 
+from apps.embeddings.filters import FILTER_COLUMNS
+
 
 class HybridRetriever:
     def __init__(self, keyword, semantic, descriptions, top_k: int | None = None):
         self._keyword = keyword            # keyword_search(query, limit) → [{source_id, name}]
         self._semantic = semantic          # search(query, k) → [{source_id, name}]
         self._descriptions = descriptions  # get_many(ids) → {source_id: description}
-        self._k = top_k or int(os.environ.get("RAG_TOP_K", "20"))
+        # 리랭크 전용 확대(ADR-0019): 리콜 위주로 넓게 뽑고 리랭커가 top-K로 컷.
+        self._k = top_k or int(os.environ.get("RAG_TOP_K", "50"))
 
     async def retrieve(
         self, keywords: list[str], semantic_query: str,
@@ -50,6 +53,8 @@ class HybridRetriever:
                 "source_id": r["source_id"],
                 "name": r.get("name", ""),
                 "description": descs.get(r["source_id"], ""),
+                # 레지스트리 값(가격·순도·분자량·보관온도)을 실어 리랭커가 숫자 판별을 하도록.
+                **{col: r.get(col) for col in FILTER_COLUMNS},
             }
             for r in ordered
         ]
