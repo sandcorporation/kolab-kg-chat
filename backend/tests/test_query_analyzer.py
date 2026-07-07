@@ -14,8 +14,23 @@ async def test_analyze_new_search_parses_terms():
     res = await a.analyze("내열 유리 플라스크 추천해줘", history=None)
     assert res.followup is False
     assert "flask" in res.keywords
-    assert "내열 유리 플라스크 추천해줘" in res.keywords   # 원 질의 보존(직접 매칭 유지)
+    assert "내열 유리 플라스크" in res.keywords   # 원 질의 핵심어 보존(군더더기 제거)
     assert "flask" in res.semantic.lower()
+
+
+async def test_analyze_strips_noise_from_preserved_keyword():
+    # 보존되는 원 질의의 군더더기(있어?·추천해줘)를 떼어 깨끗한 핵심어를 검색어로 남긴다.
+    a = QueryAnalyzer(_m('{"keywords": ["tong", "clamp"], "semantic": "실험용 집게"}'))
+    res = await a.analyze("집게 있어?", history=None)
+    assert "집게" in res.keywords              # 군더더기 없는 핵심어 보존
+    assert "집게 있어?" not in res.keywords     # 노이즈 원형은 넣지 않음
+
+
+async def test_analyze_surfaces_ko_en_expansion():
+    # 강화 프롬프트로 모델이 KO/EN·동의어를 확장하면 그 검색어들이 그대로 흐른다(리콜↑).
+    a = QueryAnalyzer(_m('{"keywords": ["집게", "tong", "clamp", "forceps"], "semantic": "실험용 집게"}'))
+    res = await a.analyze("집게 있어?", history=None)
+    assert {"집게", "tong", "clamp", "forceps"} <= set(res.keywords)
 
 
 async def test_analyze_followup_when_history_present():
@@ -38,7 +53,7 @@ async def test_analyze_parse_failure_falls_back_to_query():
     a = QueryAnalyzer(_m("이건 JSON이 아님"))
     res = await a.analyze("핀셋 있어?", history=None)
     assert res.followup is False
-    assert res.keywords == ["핀셋 있어?"]            # 원 질의로 폴백(검색 계속)
+    assert "핀셋" in res.keywords                    # 원 질의(군더더기 제거)로 폴백(검색 계속)
 
 
 _CAPTURED: dict = {"msgs": None}

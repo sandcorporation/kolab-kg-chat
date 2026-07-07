@@ -24,9 +24,11 @@ ANALYZE_PROMPT = (
     "사용자 요청과 이전 대화를 보고 상품 검색 계획을 세워라. "
     "요청이 이전에 보여준 상품을 가리키는 후속 질문이면(예: '그 중 첫 번째', '방금 그거', "
     "'이 제품 어디 써') 반드시 {\"followup\": true} 만 출력하라. "
-    "그 외 새로운 상품 탐색이면 검색용 핵심 키워드를 뽑아라(한국어·영어 각각, 카탈로그 상품명은 "
-    "영어가 많다). '추천해줘'·'있어?'·'찾아줘' 같은 군더더기는 빼라. "
-    "이전 대화가 없으면 절대 followup이 아니다. "
+    "그 외 새로운 상품 탐색이면 검색용 핵심 키워드를 뽑아라. 반드시 한국어와 영어를 모두 포함하고"
+    "(카탈로그 상품명은 영어가 많다), 짧거나 모호한 질의일수록 동의어·상위/하위 유형까지 넉넉히 "
+    "확장하라(예: '집게'→집게, tong, clamp, forceps, tweezers, retriever). 뒤에서 리랭커가 "
+    "부적합을 걸러내므로 넓게 뽑는 게 이득이다. '추천해줘'·'있어?'·'찾아줘' 같은 군더더기와 말미의 "
+    "조사·의문은 빼라. 이전 대화가 없으면 절대 followup이 아니다. "
     "원 질의의 핵심 명사는 그대로 keywords에 남기고 번역·동의어를 덧붙여라(직접 매칭 보존). "
     "숫자 제약이 있으면 filters에 넣어라(제약 있을 때만): price(원), purity(%), molecular_weight, "
     "storage_temp(℃; 냉장=2~8·냉동≤-20·실온=15~25). 이하는 {필드}_max, 이상은 {필드}_min, 범위는 둘 다. "
@@ -79,6 +81,27 @@ def _parse_terms(content: str, fallback_query: str) -> tuple[list[str], str]:
         return ([fallback_query], fallback_query)
 
 
+_NOISE_WORDS = (
+    "있어", "있나요", "있니", "있을까", "없어", "없나요", "추천해줘", "추천해", "추천",
+    "찾아줘", "찾아", "알려줘", "보여줘", "주세요", "해줘", "줘",
+)
+_NOISE_RE = re.compile(r"[\s,]*(?:" + "|".join(_NOISE_WORDS) + r")[\s?!.]*$")
+
+
+def _strip_query_noise(query: str) -> str:
+    """검색어로 보존할 원 질의에서 말미의 군더더기·의문을 떼어 깨끗한 핵심어만 남긴다.
+
+    '집게 있어?'→'집게', '내열 유리 플라스크 추천해줘'→'내열 유리 플라스크'. 여러 개 붙어도
+    반복 제거. 다 떼어 비면 원 질의를 그대로 둔다(검색 계속).
+    """
+    q = (query or "").strip()
+    prev = None
+    while prev != q and q:
+        prev = q
+        q = _NOISE_RE.sub("", q).strip().rstrip("?!.").strip()
+    return q or query.strip()
+
+
 def _is_followup(content: str) -> bool:
     try:
         data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
@@ -104,9 +127,10 @@ class QueryAnalyzer:
         if history and _is_followup(content):
             return Analysis(followup=True)
         keywords, semantic = _parse_terms(content, query)
-        # keyword 드리프트 완화: 원 질의를 검색어에 항상 보존(직접 매칭 유지 + 확장 추가).
-        if query not in keywords:
-            keywords = [query, *keywords]
+        # keyword 드리프트 완화: 원 질의의 핵심어(군더더기 제거)를 항상 보존(직접 매칭 유지 + 확장 추가).
+        core = _strip_query_noise(query)
+        if core not in keywords:
+            keywords = [core, *keywords]
         return Analysis(
             followup=False, keywords=keywords, semantic=semantic,
             filters=_parse_filters(content),

@@ -1,6 +1,6 @@
 # 03 — 질의 정규화 강화 (QueryAnalyzer)
 
-Status: ready-for-agent
+Status: done
 
 ## Parent
 
