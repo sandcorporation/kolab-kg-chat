@@ -149,7 +149,8 @@ class YoungcartMySQLConnector:
                     break
                 async with conn.cursor() as cur:
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_id > %s "
+                        "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_soldout = 0 "
+                        "AND it_id > %s "
                         "ORDER BY it_id LIMIT %s",
                         (last, size),
                     )
@@ -189,7 +190,8 @@ class YoungcartMySQLConnector:
         try:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_update_time > %s "
+                    "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_soldout = 0 "
+                    "AND it_update_time > %s "
                     "ORDER BY it_update_time, it_id",
                     (wm,),
                 )
@@ -209,9 +211,9 @@ class YoungcartMySQLConnector:
                     return None
                 await cur.execute(
                     "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price "
-                    # io_type=0 = 기본 변형만. io_type=1(교정성적서 등 부가옵션)은 가격 왜곡 → 제외.
+                    # io_type=0 = 기본 변형만. io_type=1(부가옵션)·io_stock_qty<=0(품절 옵션)은 제외.
                     "FROM g5_shop_item_option WHERE it_id = %s AND io_use = 1 AND io_type = 0 "
-                    "ORDER BY io_no",
+                    "AND io_stock_qty > 0 ORDER BY io_no",
                     (source_id,),
                 )
                 option_rows = await cur.fetchall()
@@ -248,9 +250,9 @@ class YoungcartMySQLConnector:
                 items = await cur.fetchall()
                 await cur.execute(
                     "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, it_id "
-                    # io_type=0 = 기본 변형만(부가옵션 제외 — assemble과 동일).
+                    # io_type=0 기본 변형만 + io_stock_qty>0(품절 옵션 제외) — assemble과 동일.
                     f"FROM g5_shop_item_option WHERE it_id IN ({placeholders}) AND io_use = 1 "
-                    "AND io_type = 0 ORDER BY it_id, io_no",
+                    "AND io_type = 0 AND io_stock_qty > 0 ORDER BY it_id, io_no",
                     tuple(ids),
                 )
                 option_rows = await cur.fetchall()
@@ -297,7 +299,7 @@ class YoungcartMySQLConnector:
             async with conn.cursor() as cur:
                 for kw in keywords:
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_name LIKE %s "
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_soldout=0 AND it_name LIKE %s "
                         "ORDER BY RAND() LIMIT %s",
                         (f"%{kw}%", max(1, per_keyword)),
                     )
@@ -307,7 +309,7 @@ class YoungcartMySQLConnector:
                             ids.append(sid)
                 if len(ids) < target:  # 남는 자리는 랜덤으로 채워 넓이 확보
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 ORDER BY RAND() LIMIT %s",
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_soldout=0 ORDER BY RAND() LIMIT %s",
                         ((target - len(ids)) * 3,),
                     )
                     for (sid,) in await cur.fetchall():
@@ -336,7 +338,7 @@ class YoungcartMySQLConnector:
                 await cur.execute(
                     "SELECT it_id FROM (SELECT it_id, ROW_NUMBER() OVER "
                     f"(PARTITION BY {category_field} ORDER BY it_id) rn "
-                    "FROM g5_shop_item WHERE it_use=1) t WHERE rn <= %s",
+                    "FROM g5_shop_item WHERE it_use=1 AND it_soldout=0) t WHERE rn <= %s",
                     (max(1, per_category),),
                 )
                 rows = await cur.fetchall()

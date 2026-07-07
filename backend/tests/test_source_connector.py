@@ -25,6 +25,22 @@ async def test_assemble_excludes_addon_options():
     assert min(v.price for v in doc.variants) == 13400      # 성적서 5000이 최저가로 안 튐
 
 
+async def test_assemble_excludes_soldout_options():
+    # io_stock_qty<=0 품절 옵션(SOLDOUT-VAR 8000원)은 변형·최저가에서 제외.
+    doc = await _connector().assemble("1548728629")
+    catnos = {v.raw.get("catalog_number") for v in doc.variants}
+    assert "SOLDOUT-VAR" not in catnos
+    assert min(v.price for v in doc.variants) == 13400      # 8000 품절이 최저가로 안 튐
+
+
+async def test_soldout_item_excluded_from_ingest():
+    # it_soldout=1 상품(SOLD-1)은 적재 id 선택(iter·카테고리 샘플)에서 제외.
+    ids = [pid async for pid in _connector().iter_product_ids()]
+    assert "SOLD-1" not in ids
+    cat = await _connector().sample_by_category_ids(per_category=3)
+    assert "SOLD-1" not in cat
+
+
 async def test_variant_price_is_absolute():
     doc = await _connector().assemble("1667982841")  # 점도계
     prices = {v.raw["catalog_number"]: v.price for v in doc.variants}

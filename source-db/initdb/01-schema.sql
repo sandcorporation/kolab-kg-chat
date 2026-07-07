@@ -19,6 +19,7 @@ CREATE TABLE g5_shop_item (
   it_img4  VARCHAR(255) NOT NULL DEFAULT '',
   it_img5  VARCHAR(255) NOT NULL DEFAULT '',
   it_use   TINYINT      NOT NULL DEFAULT 1,
+  it_soldout TINYINT    NOT NULL DEFAULT 0,   -- 아이템 품절 플래그(추천·적재 제외)
   it_time        DATETIME DEFAULT NULL,  -- 등록일시(그누보드5)
   it_update_time DATETIME DEFAULT NULL   -- 수정일시(증분 동기화 기준, 이슈 05)
 ) DEFAULT CHARSET=utf8mb4;
@@ -35,5 +36,6 @@ CREATE TABLE g5_shop_item_option (
   io_unit        VARCHAR(255) NOT NULL DEFAULT '',
   io_price       INT          NOT NULL DEFAULT 0,
   io_use         TINYINT      NOT NULL DEFAULT 1,
+  io_stock_qty   INT          NOT NULL DEFAULT 9999,  -- 옵션 재고. <=0 = 품절(실데이터 대부분 9999=재고있음)
   KEY idx_option_it (it_id)
 ) DEFAULT CHARSET=utf8mb4;

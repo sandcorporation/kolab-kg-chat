@@ -17,6 +17,11 @@ INSERT INTO g5_shop_item
    '중수소수 D2O 순도 99.9% CAS 7789-20-0', '<p>Deuterium oxide. D 99.9%. CAS 7789-20-0.</p>',
    'https://img.test/d2o/main.jpg', '', '', '', 1);
 
+-- 품절 아이템(it_soldout=1) — 적재 id 선택(iter/sample/changed_since)이 걸러야 한다.
+INSERT INTO g5_shop_item
+  (it_id, ca_id, ca_id2, it_name, it_brand, it_price, it_basic, it_use, it_soldout) VALUES
+  ('SOLD-1', '20', '2010', '품절 상품 테스트', 'TESTBRAND', 10000, '품절 테스트', 1, 1);
+
 -- 증분 동기화 기준선(모든 상품 동일 baseline). 테스트는 특정 상품의 it_update_time을 올린다.
 UPDATE g5_shop_item SET it_time = '2026-01-01 00:00:00', it_update_time = '2026-01-01 00:00:00';
 
@@ -52,6 +57,11 @@ INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit
 -- (실사례 1515660121: 성적서 5만원이 최저가로 튀던 버그 재현). 최저가는 13400이어야.
 INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit, io_price, io_type) VALUES
   ('1548728629', '90', 'CAL-CERT', '교정성적서 질량 교정', 'EA', 5000, 1);
+
+-- 품절 옵션(io_type=0, io_stock_qty=0) — io_stock_qty>0 필터로 변형·최저가에서 제외되어야 함
+-- (실사례 1515569969 AD-720Di 프린터 품절). 8000<13400이라 제외 안 하면 최저가로 튐.
+INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit, io_price, io_stock_qty) VALUES
+  ('1548728629', '91', 'SOLDOUT-VAR', '품절 변형', 'EA', 8000, 0);
 
 -- 점도계 구성 2 (functional)
 INSERT INTO g5_shop_item_option (it_id, io_id, io_catno, io_description, io_unit, io_price) VALUES

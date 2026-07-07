@@ -19,10 +19,11 @@ async def _connect():
 
 
 async def test_seed_has_four_products():
+    # 판매 상품 4종(품절 it_soldout=1 픽스처는 별도 — 적재 대상 아님).
     conn = await _connect()
     try:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT COUNT(*) FROM g5_shop_item")
+            await cur.execute("SELECT COUNT(*) FROM g5_shop_item WHERE it_soldout = 0")
             (n,) = await cur.fetchone()
             assert n == 4
     finally:
@@ -41,7 +42,8 @@ async def test_variant_counts_per_product():
         async with conn.cursor() as cur:
             for it_id, count in expected.items():
                 await cur.execute(
-                    "SELECT COUNT(*) FROM g5_shop_item_option WHERE it_id = %s AND io_type = 0",
+                    "SELECT COUNT(*) FROM g5_shop_item_option "
+                    "WHERE it_id = %s AND io_type = 0 AND io_stock_qty > 0",
                     (it_id,),
                 )
                 (n,) = await cur.fetchone()
