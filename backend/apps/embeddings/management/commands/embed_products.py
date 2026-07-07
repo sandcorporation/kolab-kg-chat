@@ -102,4 +102,10 @@ class Command(BaseCommand):
         step = concurrency * 4
         for i in range(0, len(ids), step):
             results += await asyncio.gather(*[one(s) for s in ids[i:i + step]])
+
+        # 적재 완료 후 HNSW 근사인덱스 빌드(대규모 검색 가속). populated 테이블 일괄
+        # 빌드가 증분보다 빠르다 — 소규모에선 플래너가 안 써도 무해, 61만에서 위력.
+        built = await emb.ensure_ann_index()
+        if built:
+            self.stdout.write(self.style.SUCCESS("HNSW ANN 인덱스 빌드 완료"))
         return sum(results), len(ids)

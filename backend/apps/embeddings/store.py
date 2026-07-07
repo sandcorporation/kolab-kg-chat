@@ -127,6 +127,53 @@ class EmbeddingStore:
         except Exception:  # noqa: BLE001 — 인덱스는 성능 최적화일 뿐 필수 아님
             pass
 
+    async def ensure_ann_index(self) -> bool:
+        """대량 적재 후 1회 — HNSW 근사최근접 인덱스를 빌드한다(대규모 검색 가속).
+
+        HNSW는 고정 차원 컬럼을 요구하므로, 저장된 임베딩에서 차원을 유도해(제공자 무관:
+        fake=8·openai=1536) 컬럼을 vector(N)으로 한 번 고정한 뒤, 검색이 쓰는 L2
+        연산자(`<->`)에 맞춰 vector_l2_ops HNSW를 만든다. 데이터가 없으면 차원을 알 수
+        없어 False(안전 no-op), 만들었거나 이미 있으면 True. 권한이 없으면 조용히 False
+        (인덱스는 성능 최적화일 뿐 — 인덱스가 없어도 전수 KNN으로 정확히 동작한다).
+
+        소규모(수천)에선 플래너가 전수 스캔을 택해 이득이 없지만, 61만 규모에선 전수
+        스캔(질의당 수백 ms)을 ~10ms로 낮춘다. 증분 삽입은 HNSW가 자동 유지한다.
+        """
+        conn = await self._connect()
+        try:
+            async with conn.cursor() as cur:
+                await self._ensure(cur)
+                await cur.execute(
+                    f"SELECT vector_dims(embedding) FROM {self._table} "
+                    "WHERE embedding IS NOT NULL LIMIT 1"
+                )
+                row = await cur.fetchone()
+                if not row:
+                    return False  # 데이터 없음 → 차원 유도 불가 → HNSW 불가
+                dim = int(row[0])
+                try:
+                    # 컬럼이 미고정(bare vector)일 때만 차원 고정 — 대형 테이블 반복 재작성 방지
+                    await cur.execute(
+                        "SELECT atttypmod FROM pg_attribute "
+                        "WHERE attrelid = %s::regclass AND attname = 'embedding'",
+                        (self._table,),
+                    )
+                    if (await cur.fetchone())[0] < 0:  # -1 = 차원 미지정
+                        await cur.execute(
+                            f"ALTER TABLE {self._table} "
+                            f"ALTER COLUMN embedding TYPE vector({dim})"
+                        )
+                    idx = self._table.split(".")[-1] + "_hnsw"
+                    await cur.execute(
+                        f"CREATE INDEX IF NOT EXISTS {idx} ON {self._table} "
+                        "USING hnsw (embedding vector_l2_ops)"
+                    )
+                except Exception:  # noqa: BLE001 — 인덱스는 성능 최적화일 뿐 필수 아님
+                    return False
+                return True
+        finally:
+            await conn.close()
+
     async def keyword_search(self, query: str, limit: int = 10, filters: dict | None = None) -> list[dict]:
         """상품명에 질의 토큰(OR·대소문자 무시)이 포함된 상품 — 시맨틱이 놓치는 정확어·코드 보완.
 
