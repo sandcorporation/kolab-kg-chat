@@ -1,6 +1,6 @@
 # 05 — ADR-0019 + 배선/설정 + 라이브 검증·회귀
 
-Status: ready-for-agent
+Status: done
 
 ## Parent
 

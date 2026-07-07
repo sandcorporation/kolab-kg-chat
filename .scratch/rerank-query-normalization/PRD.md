@@ -1,6 +1,6 @@
 # PRD: 리랭크 스테이지 + 질의 정규화 (리콜 역전·검색 정밀도)
 
-Status: ready-for-agent
+Status: done
 
 ## Problem Statement
 
