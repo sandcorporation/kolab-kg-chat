@@ -6,12 +6,12 @@ from apps.connectors.base import ProductDocument, SourceImage, SourceVariant
 from apps.extraction.extractor import ExtractedAttribute, ExtractionResult
 
 
-def _doc(source_id: str, *, prices=(), images=()) -> ProductDocument:
+def _doc(source_id: str, *, prices=(), images=(), soldout=False) -> ProductDocument:
     return ProductDocument(
         source_id=source_id, name="비커", brand="B", category_path=[], description_text="",
         images=[SourceImage(url=u, position=i + 1, source="gallery") for i, u in enumerate(images)],
         variants=[SourceVariant(str(i), f"o{i}", p, {}) for i, p in enumerate(prices)],
-        content_hash="h", raw={}, fetched_at=datetime.now(timezone.utc),
+        content_hash="h", raw={}, fetched_at=datetime.now(timezone.utc), soldout=soldout,
     )
 
 
@@ -68,3 +68,12 @@ async def test_enrich_price_none_when_no_prices():
     card = (await _enricher(_FakeConnector(doc)).enrich(["pr2"]))[0]
     assert card["price_min"] is None
     assert card["price_max"] is None
+
+
+async def test_enrich_flags_soldout():
+    # 품절 상품은 카드에 soldout=True로 실려 온다(스트림이 안내 메시지를 붙이도록).
+    normal = _doc("ok1")
+    sold = _doc("s1", soldout=True)
+    cards = await _enricher(_FakeConnector(normal, sold)).enrich(["ok1", "s1"])
+    assert cards[0]["soldout"] is False
+    assert cards[1]["soldout"] is True

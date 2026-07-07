@@ -49,6 +49,23 @@ async def test_event_stream_emits_typed_events():
     assert "event: done" in text
 
 
+async def test_soldout_recommendation_appends_notice():
+    # 추천에 품절 상품이 포함되면 안내 메시지를 붙이고, 카드도 그대로 보여준다.
+    agent = FakeAgent(tokens=["추천합니다."], recommended=["s1"])
+    card = _card("s1")
+    card["soldout"] = True
+    frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
+    text = frames.decode("utf-8")
+    assert "품절" in text and "재고 문의" in text
+    assert "event: recommendation" in text and "s1" in text
+
+
+async def test_available_recommendation_has_no_soldout_notice():
+    agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"])
+    frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([_card("1548728629")]), "q")])
+    assert "재고 문의" not in frames.decode("utf-8")
+
+
 async def test_event_stream_emits_status_event():
     agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"],
                       statuses=["상품 검색 중…"])

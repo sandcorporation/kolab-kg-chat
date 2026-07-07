@@ -32,6 +32,7 @@ class ProductEnricher:
                 "image_url": images[0].url if images else None,
                 "price_min": min(prices) if prices else None,
                 "price_max": max(prices) if prices else None,
+                "soldout": doc.soldout,  # 품절 상품 — 스트림이 안내 메시지를 붙인다
                 "grounding": [
                     {"name": a.name, "value": a.value, "provenance": a.provenance}
                     for a in result.attributes

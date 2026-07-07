@@ -33,12 +33,16 @@ async def test_assemble_excludes_soldout_options():
     assert min(v.price for v in doc.variants) == 13400      # 8000 품절이 최저가로 안 튐
 
 
-async def test_soldout_item_excluded_from_ingest():
-    # it_soldout=1 상품(SOLD-1)은 적재 id 선택(iter·카테고리 샘플)에서 제외.
-    ids = [pid async for pid in _connector().iter_product_ids()]
-    assert "SOLD-1" not in ids
-    cat = await _connector().sample_by_category_ids(per_category=3)
-    assert "SOLD-1" not in cat
+async def test_assemble_flags_soldout_item():
+    # it_soldout=1 상품(SOLD-1)은 추천 가능하되 soldout=True로 표시(안내 메시지용).
+    doc = await _connector().assemble("SOLD-1")
+    assert doc is not None and doc.soldout is True
+
+
+async def test_assemble_available_product_not_soldout():
+    # 구매 가능한 변형이 있는 상품(flask)은 soldout=False.
+    doc = await _connector().assemble("1548728629")
+    assert doc.soldout is False
 
 
 async def test_variant_price_is_absolute():
@@ -54,9 +58,10 @@ async def test_category_path_is_codes():
     assert doc.category_path == ["20", "2010"]
 
 
-async def test_iter_product_ids_yields_all_four():
+async def test_iter_product_ids_includes_soldout():
+    # 품절 상품(SOLD-1)도 적재·추천 대상에 포함된다(추천 시 안내 메시지로 처리).
     ids = [pid async for pid in _connector().iter_product_ids()]
-    assert set(ids) == {"1712107033", "1548728629", "1667982841", "DLM-4"}
+    assert set(ids) == {"1712107033", "1548728629", "1667982841", "DLM-4", "SOLD-1"}
 
 
 async def test_assemble_is_deterministic():
@@ -150,9 +155,9 @@ def test_clean_brand_drops_numeric_and_empty():
 
 
 async def test_sample_by_category_all_when_under_cap():
-    # 카테고리 20(1)·30(2)·40(1) 각 ≤3 → 전부 포함
+    # 카테고리 20(1548728629·SOLD-1)·30(2)·40(1) 각 ≤3 → 전부(품절 SOLD-1 포함)
     ids = await _connector().sample_by_category_ids(per_category=3)
-    assert set(ids) == {"1548728629", "1667982841", "1712107033", "DLM-4"}
+    assert set(ids) == {"1548728629", "1667982841", "1712107033", "DLM-4", "SOLD-1"}
 
 
 async def test_sample_by_category_caps_per_category():

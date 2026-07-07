@@ -1,7 +1,7 @@
 """이슈 04 — Source Connector 키셋 스트리밍 + 커넥션 재사용."""
 from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
 
-ALL_IDS = {"1712107033", "1548728629", "1667982841", "DLM-4"}
+ALL_IDS = {"1712107033", "1548728629", "1667982841", "DLM-4", "SOLD-1"}  # 품절 상품도 적재 대상
 
 
 async def test_iter_yields_all_ids_no_dup():

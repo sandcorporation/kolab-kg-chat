@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import json
 
+# 추천에 품절 상품이 포함될 때 근거 뒤에 붙이는 안내(실제 문의·구매 요청 기능은 없음).
+_SOLDOUT_NOTICE = "\n\n해당 상품(들)은 품절되었습니다. 담당자에게 재고 문의 및 구매 요청을 할까요?"
+
 
 def sse(event_type: str, data: dict) -> bytes:
     frame = f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -30,6 +33,8 @@ async def agent_event_stream(agent, enricher, query: str, history=None):
             elif event["type"] == "result":
                 recommended = event["recommended_ids"]
         cards = await enricher.enrich(recommended)
+        if any(c.get("soldout") for c in cards):  # 품절 상품 포함 → 재고 문의 안내
+            yield sse("token", {"content": _SOLDOUT_NOTICE})
         yield sse("recommendation", {"products": cards})
         yield sse("done", {})
     except Exception as exc:  # noqa: BLE001 — 스트림 내 오류는 error 이벤트로

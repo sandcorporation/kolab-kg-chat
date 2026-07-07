@@ -7,7 +7,7 @@ from apps.connectors.youngcart_mysql import YoungcartMySQLConnector
 from apps.embeddings.store import EmbeddingStore, FakeEmbeddingProvider
 from apps.sync.runner import IngestRunner, StructuredFieldInfoExtractor
 
-ALL_IDS = {"1712107033", "1548728629", "1667982841", "DLM-4"}
+ALL_IDS = {"1712107033", "1548728629", "1667982841", "DLM-4", "SOLD-1"}  # 품절 상품도 적재 대상
 
 
 async def _runner():
@@ -22,7 +22,7 @@ async def _runner():
 async def test_batched_full_load_ingests_all_and_idempotent():
     embedder, runner = await _runner()
     counts = await runner.full_load(batch_size=2)
-    assert counts.get("created") == 4
+    assert counts.get("created") == 5
     assert set(await embedder.content_hashes()) == ALL_IDS
 
     # 재실행 멱등(중복 없음, 갱신으로 반영)
@@ -30,5 +30,5 @@ async def test_batched_full_load_ingests_all_and_idempotent():
         YoungcartMySQLConnector.from_env(), StructuredFieldInfoExtractor(), embedder=embedder
     )
     counts2 = await runner2.full_load(batch_size=2)
-    assert counts2.get("updated") == 4
+    assert counts2.get("updated") == 5
     assert set(await embedder.content_hashes()) == ALL_IDS

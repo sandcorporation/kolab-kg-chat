@@ -42,6 +42,7 @@ class ProductDocument:
     raw: dict                 # 원본 escape hatch
     fetched_at: datetime
     pdf_url: str = ""         # 상품 스펙 PDF URL(선택, PDF 문서 강화 — 없으면 "")
+    soldout: bool = False     # 품절(it_soldout=1 or io_type=0 옵션이 전부 품절) — 추천 시 안내용
 
 
 @dataclass(frozen=True)

@@ -149,8 +149,7 @@ class YoungcartMySQLConnector:
                     break
                 async with conn.cursor() as cur:
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_soldout = 0 "
-                        "AND it_id > %s "
+                        "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_id > %s "
                         "ORDER BY it_id LIMIT %s",
                         (last, size),
                     )
@@ -190,8 +189,7 @@ class YoungcartMySQLConnector:
         try:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_soldout = 0 "
-                    "AND it_update_time > %s "
+                    "SELECT it_id FROM g5_shop_item WHERE it_use = 1 AND it_update_time > %s "
                     "ORDER BY it_update_time, it_id",
                     (wm,),
                 )
@@ -210,10 +208,11 @@ class YoungcartMySQLConnector:
                 if item is None:
                     return None
                 await cur.execute(
-                    "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price "
-                    # io_type=0 = 기본 변형만. io_type=1(부가옵션)·io_stock_qty<=0(품절 옵션)은 제외.
+                    "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, io_stock_qty "
+                    # io_type=0 기본 변형만(부가옵션 제외). io_stock_qty는 _build_document에서
+                    # 가용 판정·soldout 감지에 쓴다(품절 옵션은 가격 제외, 전부 품절이면 soldout).
                     "FROM g5_shop_item_option WHERE it_id = %s AND io_use = 1 AND io_type = 0 "
-                    "AND io_stock_qty > 0 ORDER BY io_no",
+                    "ORDER BY io_no",
                     (source_id,),
                 )
                 option_rows = await cur.fetchall()
@@ -249,10 +248,10 @@ class YoungcartMySQLConnector:
                 )
                 items = await cur.fetchall()
                 await cur.execute(
-                    "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, it_id "
-                    # io_type=0 기본 변형만 + io_stock_qty>0(품절 옵션 제외) — assemble과 동일.
+                    "SELECT io_no, io_catno, io_model, io_description, io_unit, io_price, it_id, io_stock_qty "
+                    # io_type=0 기본 변형만. io_stock_qty는 _build_document에서 가용·soldout 판정.
                     f"FROM g5_shop_item_option WHERE it_id IN ({placeholders}) AND io_use = 1 "
-                    "AND io_type = 0 AND io_stock_qty > 0 ORDER BY it_id, io_no",
+                    "AND io_type = 0 ORDER BY it_id, io_no",
                     tuple(ids),
                 )
                 option_rows = await cur.fetchall()
@@ -299,7 +298,7 @@ class YoungcartMySQLConnector:
             async with conn.cursor() as cur:
                 for kw in keywords:
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_soldout=0 AND it_name LIKE %s "
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_name LIKE %s "
                         "ORDER BY RAND() LIMIT %s",
                         (f"%{kw}%", max(1, per_keyword)),
                     )
@@ -309,7 +308,7 @@ class YoungcartMySQLConnector:
                             ids.append(sid)
                 if len(ids) < target:  # 남는 자리는 랜덤으로 채워 넓이 확보
                     await cur.execute(
-                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 AND it_soldout=0 ORDER BY RAND() LIMIT %s",
+                        "SELECT it_id FROM g5_shop_item WHERE it_use=1 ORDER BY RAND() LIMIT %s",
                         ((target - len(ids)) * 3,),
                     )
                     for (sid,) in await cur.fetchall():
@@ -338,7 +337,7 @@ class YoungcartMySQLConnector:
                 await cur.execute(
                     "SELECT it_id FROM (SELECT it_id, ROW_NUMBER() OVER "
                     f"(PARTITION BY {category_field} ORDER BY it_id) rn "
-                    "FROM g5_shop_item WHERE it_use=1 AND it_soldout=0) t WHERE rn <= %s",
+                    "FROM g5_shop_item WHERE it_use=1) t WHERE rn <= %s",
                     (max(1, per_category),),
                 )
                 rows = await cur.fetchall()
@@ -348,8 +347,10 @@ class YoungcartMySQLConnector:
 
     def _build_document(self, item, option_rows, field_by_catno) -> ProductDocument:
         base_price = item.get("it_price") or 0
+        # 구매 가능 옵션만 변형·가격에 쓴다(io_stock_qty>0). 품절 옵션은 soldout 판정에만.
+        available = [o for o in option_rows if (o.get("io_stock_qty") or 0) > 0]
         variants = []
-        for o in option_rows:
+        for o in available:
             raw = {**o, "catalog_number": o.get("io_catno")}
             field_info = field_by_catno.get(o.get("io_catno") or "")
             if field_info:
@@ -389,6 +390,8 @@ class YoungcartMySQLConnector:
         ]
 
         pdf_url = (item.get(_pdf_field()) or "").strip()  # 선택 스펙 PDF URL(없으면 "")
+        # 품절: 아이템 플래그 or (io_type=0 옵션이 있었는데 구매 가능한 게 하나도 없음).
+        soldout = int(item.get("it_soldout") or 0) == 1 or (bool(option_rows) and not available)
         return ProductDocument(
             source_id=item["it_id"],
             name=item["it_name"],
@@ -403,6 +406,7 @@ class YoungcartMySQLConnector:
             raw=dict(item),
             fetched_at=datetime.now(timezone.utc),
             pdf_url=pdf_url,
+            soldout=soldout,
         )
 
     async def subscribe_changes(self):
