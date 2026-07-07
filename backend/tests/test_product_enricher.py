@@ -77,3 +77,18 @@ async def test_enrich_flags_soldout():
     cards = await _enricher(_FakeConnector(normal, sold)).enrich(["ok1", "s1"])
     assert cards[0]["soldout"] is False
     assert cards[1]["soldout"] is True
+
+
+async def test_enrich_lists_soldout_options_and_price_includes_them():
+    # 품절 옵션도 가격에 포함하되, 카드에 품절 옵션명을 실어 안내할 수 있게 한다.
+    doc = ProductDocument(
+        source_id="p1", name="핸들비이커", brand="B", category_path=[], description_text="",
+        images=[], variants=[
+            SourceVariant("1", "10L PE", 5000, {}, soldout=False),
+            SourceVariant("2", "20L PP", 3000, {}, soldout=True),
+        ],
+        content_hash="h", raw={}, fetched_at=datetime.now(timezone.utc),
+    )
+    card = (await _enricher(_FakeConnector(doc)).enrich(["p1"]))[0]
+    assert card["soldout_options"] == ["20L PP"]   # 품절 옵션명
+    assert card["price_min"] == 3000                # 품절 옵션도 가격에 포함

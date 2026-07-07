@@ -9,28 +9,29 @@ def _connector() -> YoungcartMySQLConnector:
     return YoungcartMySQLConnector.from_env()
 
 
-async def test_assemble_flask_has_19_variants():
+async def test_assemble_flask_has_19_available_variants():
     doc = await _connector().assemble("1548728629")
     assert doc is not None
     assert doc.name.startswith("Volumetric Flask")
     assert doc.brand == "ISOLAB"
-    assert len(doc.variants) == 19
+    assert len([v for v in doc.variants if not v.soldout]) == 19  # 19 사이즈(+품절 픽스처 1)
 
 
 async def test_assemble_excludes_addon_options():
-    # io_type=1 부가옵션(교정성적서 5000원)은 변형·최저가에서 제외 — 최저가는 실제 변형가여야.
+    # io_type=1 부가옵션(교정성적서 5000원)은 변형·가격에서 제외(품절 옵션과 달리 아예 안 섞임).
     doc = await _connector().assemble("1548728629")
     catnos = {v.raw.get("catalog_number") for v in doc.variants}
     assert "CAL-CERT" not in catnos                        # 부가옵션은 변형이 아님
-    assert min(v.price for v in doc.variants) == 13400      # 성적서 5000이 최저가로 안 튐
+    assert 5000 not in {v.price for v in doc.variants}      # 성적서 가격(5000)이 안 섞임
 
 
-async def test_assemble_excludes_soldout_options():
-    # io_stock_qty<=0 품절 옵션(SOLDOUT-VAR 8000원)은 변형·최저가에서 제외.
+async def test_assemble_includes_soldout_option_flagged():
+    # io_stock_qty<=0 품절 옵션(SOLDOUT-VAR 8000원)도 변형·가격에 포함하되 soldout 플래그로 표시.
     doc = await _connector().assemble("1548728629")
-    catnos = {v.raw.get("catalog_number") for v in doc.variants}
-    assert "SOLDOUT-VAR" not in catnos
-    assert min(v.price for v in doc.variants) == 13400      # 8000 품절이 최저가로 안 튐
+    by_catno = {v.raw.get("catalog_number"): v for v in doc.variants}
+    assert "SOLDOUT-VAR" in by_catno                        # 품절 옵션도 변형에 포함
+    assert by_catno["SOLDOUT-VAR"].soldout is True          # 품절 플래그
+    assert min(v.price for v in doc.variants) == 8000        # 품절 옵션이 최저가에 반영(가격에 섞임)
 
 
 async def test_assemble_flags_soldout_item():

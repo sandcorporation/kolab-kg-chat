@@ -66,6 +66,17 @@ async def test_available_recommendation_has_no_soldout_notice():
     assert "재고 문의" not in frames.decode("utf-8")
 
 
+async def test_soldout_option_notice_names_the_option():
+    # 일부 옵션 품절이면 안내가 그 옵션명을 명시한다(가격엔 포함됨).
+    agent = FakeAgent(tokens=["추천합니다."], recommended=["p1"])
+    card = _card("p1")
+    card["soldout"] = False
+    card["soldout_options"] = ["10L PE 핸들비이커"]
+    frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
+    text = frames.decode("utf-8")
+    assert "10L PE 핸들비이커" in text and "품절" in text and "재고 문의" in text
+
+
 async def test_event_stream_emits_status_event():
     agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"],
                       statuses=["상품 검색 중…"])

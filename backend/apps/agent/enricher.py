@@ -25,6 +25,8 @@ class ProductEnricher:
             result = await self._extractor.extract(doc)
             prices = [v.price for v in (doc.variants or []) if v.price is not None]
             images = doc.images or []
+            # 품절 옵션은 가격에 포함하되, 어떤 옵션이 품절인지 안내로 알린다.
+            soldout_options = [v.label for v in (doc.variants or []) if v.soldout and v.label]
             cards.append({
                 "source_id": source_id,
                 "name": doc.name,
@@ -32,7 +34,8 @@ class ProductEnricher:
                 "image_url": images[0].url if images else None,
                 "price_min": min(prices) if prices else None,
                 "price_max": max(prices) if prices else None,
-                "soldout": doc.soldout,  # 품절 상품 — 스트림이 안내 메시지를 붙인다
+                "soldout": doc.soldout,          # 상품 전체 품절(안내: 상품 품절)
+                "soldout_options": soldout_options,  # 품절 옵션명(안내: 해당 옵션 품절)
                 "grounding": [
                     {"name": a.name, "value": a.value, "provenance": a.provenance}
                     for a in result.attributes

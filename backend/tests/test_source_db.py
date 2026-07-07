@@ -31,9 +31,9 @@ async def test_seed_has_four_products():
 
 
 async def test_variant_counts_per_product():
-    expected = {  # 변형 = io_type=0(부가옵션 io_type=1 제외). flask엔 교정성적서 add-on 1개 있음.
+    expected = {  # 변형 = io_type=0(부가옵션 io_type=1 제외, 품절 옵션은 포함).
         "1712107033": 3,    # PIPET PRO 색상
-        "1548728629": 19,   # 메스플라스크 용량
+        "1548728629": 20,   # 메스플라스크 용량 19 + 품절 픽스처 1
         "1667982841": 2,    # 점도계 구성
         "DLM-4": 5,         # 중수소수 포장
     }
@@ -42,8 +42,7 @@ async def test_variant_counts_per_product():
         async with conn.cursor() as cur:
             for it_id, count in expected.items():
                 await cur.execute(
-                    "SELECT COUNT(*) FROM g5_shop_item_option "
-                    "WHERE it_id = %s AND io_type = 0 AND io_stock_qty > 0",
+                    "SELECT COUNT(*) FROM g5_shop_item_option WHERE it_id = %s AND io_type = 0",
                     (it_id,),
                 )
                 (n,) = await cur.fetchone()

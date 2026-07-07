@@ -25,6 +25,7 @@ class SourceVariant:
     label: str                # 원형 옵션 라벨
     price: int | None         # 절대 가격(KRW). 소스의 가격 delta는 커넥터가 해소한다.
     raw: dict
+    soldout: bool = False     # 이 옵션 품절(io_stock_qty<=0) — 가격엔 포함하되 안내로 알린다
 
 
 @dataclass(frozen=True)

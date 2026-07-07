@@ -347,10 +347,10 @@ class YoungcartMySQLConnector:
 
     def _build_document(self, item, option_rows, field_by_catno) -> ProductDocument:
         base_price = item.get("it_price") or 0
-        # 구매 가능 옵션만 변형·가격에 쓴다(io_stock_qty>0). 품절 옵션은 soldout 판정에만.
-        available = [o for o in option_rows if (o.get("io_stock_qty") or 0) > 0]
+        # 품절 옵션도 변형·가격에 포함하고(io_stock_qty<=0), 변형별 soldout 플래그로 표시한다.
+        # 안내는 상위(스트림)가 품절 옵션명을 알려준다.
         variants = []
-        for o in available:
+        for o in option_rows:
             raw = {**o, "catalog_number": o.get("io_catno")}
             field_info = field_by_catno.get(o.get("io_catno") or "")
             if field_info:
@@ -362,6 +362,7 @@ class YoungcartMySQLConnector:
                     # 이 쇼핑몰의 io_price는 절대가(관측). 옵션가 없으면 상품 기본가로 폴백.
                     price=(o.get("io_price") or base_price) or None,
                     raw=raw,
+                    soldout=(o.get("io_stock_qty") or 0) <= 0,
                 )
             )
 
@@ -390,8 +391,10 @@ class YoungcartMySQLConnector:
         ]
 
         pdf_url = (item.get(_pdf_field()) or "").strip()  # 선택 스펙 PDF URL(없으면 "")
-        # 품절: 아이템 플래그 or (io_type=0 옵션이 있었는데 구매 가능한 게 하나도 없음).
-        soldout = int(item.get("it_soldout") or 0) == 1 or (bool(option_rows) and not available)
+        # 상품 전체 품절: 아이템 플래그 or (변형이 있는데 전부 품절).
+        soldout = int(item.get("it_soldout") or 0) == 1 or (
+            bool(variants) and all(v.soldout for v in variants)
+        )
         return ProductDocument(
             source_id=item["it_id"],
             name=item["it_name"],

@@ -8,8 +8,20 @@ from __future__ import annotations
 
 import json
 
-# 추천에 품절 상품이 포함될 때 근거 뒤에 붙이는 안내(실제 문의·구매 요청 기능은 없음).
-_SOLDOUT_NOTICE = "\n\n해당 상품(들)은 품절되었습니다. 담당자에게 재고 문의 및 구매 요청을 할까요?"
+_SOLDOUT_SUFFIX = " 담당자에게 재고 문의 및 구매 요청을 할까요?"
+
+
+def _soldout_notice(cards) -> str:
+    """추천에 품절이 있으면 근거 뒤에 붙일 안내(품절 옵션명 명시). 실제 문의·구매 기능은 없음."""
+    lines = []
+    for c in cards:
+        name = c.get("name") or "해당 상품"
+        opts = c.get("soldout_options") or []
+        if opts:  # 일부 옵션 품절 → 어떤 옵션인지 명시(가격엔 포함됨)
+            lines.append(f"'{name}'의 다음 옵션은 품절되었습니다: {', '.join(opts)}")
+        elif c.get("soldout"):  # 상품 전체 품절
+            lines.append(f"'{name}'은(는) 품절되었습니다")
+    return ("\n\n" + " / ".join(lines) + "." + _SOLDOUT_SUFFIX) if lines else ""
 
 
 def sse(event_type: str, data: dict) -> bytes:
@@ -33,8 +45,9 @@ async def agent_event_stream(agent, enricher, query: str, history=None):
             elif event["type"] == "result":
                 recommended = event["recommended_ids"]
         cards = await enricher.enrich(recommended)
-        if any(c.get("soldout") for c in cards):  # 품절 상품 포함 → 재고 문의 안내
-            yield sse("token", {"content": _SOLDOUT_NOTICE})
+        notice = _soldout_notice(cards)  # 품절 상품·옵션 포함 → 재고 문의 안내
+        if notice:
+            yield sse("token", {"content": notice})
         yield sse("recommendation", {"products": cards})
         yield sse("done", {})
     except Exception as exc:  # noqa: BLE001 — 스트림 내 오류는 error 이벤트로
