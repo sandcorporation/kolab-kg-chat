@@ -108,6 +108,23 @@ async def test_assembled_product_has_empty_pdf_url_without_column():
     assert doc.pdf_url == ""
 
 
+def test_clean_brand_preserves_real_names():
+    from apps.connectors.youngcart_mysql import _clean_brand
+
+    assert _clean_brand("ALDRICH") == "ALDRICH"
+    assert _clean_brand("  SIGMA ") == "SIGMA"       # 공백 정리
+    assert _clean_brand("3M") == "3M"                # 숫자 포함이지만 정상 브랜드 → 보존
+
+
+def test_clean_brand_drops_numeric_and_empty():
+    from apps.connectors.youngcart_mysql import _clean_brand
+
+    assert _clean_brand("7") is None                 # 순수 숫자 코드 오염(비이커집게) → 무효
+    assert _clean_brand("325") is None               # it_maker 코드류 → 무효
+    assert _clean_brand("") is None
+    assert _clean_brand(None) is None
+
+
 async def test_sample_by_category_all_when_under_cap():
     # 카테고리 20(1)·30(2)·40(1) 각 ≤3 → 전부 포함
     ids = await _connector().sample_by_category_ids(per_category=3)

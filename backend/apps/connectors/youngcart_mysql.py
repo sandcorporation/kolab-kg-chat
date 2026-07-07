@@ -36,6 +36,20 @@ def _strip_html(text: str | None) -> str:
     return _WS_RE.sub(" ", _TAG_RE.sub(" ", text)).strip()
 
 
+def _clean_brand(raw: str | None) -> str | None:
+    """it_brand → 표시용 브랜드명. 순수 숫자 코드 오염·빈값은 무효화(None).
+
+    소스 it_brand는 98.5%가 정상 브랜드명(ALDRICH·SIGMA·3M…)이나, 일부(≈0.4%)는 "7"
+    같은 숫자 코드가 섞여 있고 코드→이름 매핑 테이블도 없다. 순수 숫자면 브랜드명일 수
+    없으므로(3M처럼 숫자를 '포함'만 하는 정상명은 보존) 감춘다 — 코드 노출보다 낫다.
+    it_maker로는 폴백하지 않는다(it_maker는 전부 숫자 코드라 이름이 아니다).
+    """
+    b = (raw or "").strip()
+    if not b or b.isdigit():
+        return None
+    return b
+
+
 def extract_img_srcs(html: str | None) -> list[str]:
     """it_explan HTML에 박힌 스펙 이미지 <img src>를 순서대로 추출한다(이슈 01)."""
     if not html:
@@ -361,7 +375,7 @@ class YoungcartMySQLConnector:
         description_text = _strip_html(
             " ".join(filter(None, [item.get("it_basic"), item.get("it_explan")]))
         )
-        brand = (item.get("it_brand") or item.get("it_maker") or "").strip() or None
+        brand = _clean_brand(item.get("it_brand"))  # 숫자 코드 오염 무효화, it_maker 폴백 없음
         # 카테고리 이름 테이블이 덤프에 없으므로 코드만 보존(ca_id/ca_id2/ca_id3).
         category_path = [
             c.strip()
