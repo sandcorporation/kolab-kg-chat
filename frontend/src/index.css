@@ -84,7 +84,7 @@ body {
   letter-spacing: -.005em; white-space: pre-wrap;
 }
 .msg--bot {
-  align-self: flex-start; width: 100%; max-width: 100%;
+  align-self: flex-start; max-width: 90%;
   display: flex; flex-direction: column; gap: 13px;
 }
 
