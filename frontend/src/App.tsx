@@ -135,8 +135,11 @@ export function App() {
           aria-label="질문 입력"
           disabled={busy}
         />
-        <button onClick={() => send()} disabled={busy || !input.trim()}>
-          보내기
+        <button onClick={() => send()} disabled={busy || !input.trim()} aria-label="보내기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 19V5M6 11l6-6 6 6" />
+          </svg>
         </button>
       </div>
     </div>
@@ -207,9 +210,19 @@ export function SuggestionChips({
   if (!suggestions.length) return null;
   return (
     <div className="chips" data-testid="suggestions">
+      <div className="suggest-head">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2l1.6 4.6L18 8l-4.4 1.4L12 14l-1.6-4.6L6 8l4.4-1.4L12 2Zm6 9l.9 2.4L21 14l-2.1.6L18 17l-.9-2.4L15 14l2.1-.6L18 11Z" />
+        </svg>
+        이어서 물어보기
+      </div>
       {suggestions.map((s, i) => (
         <button key={i} type="button" className="chip" onClick={() => onPick(s)}>
           {s}
+          <svg className="arw" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
         </button>
       ))}
     </div>

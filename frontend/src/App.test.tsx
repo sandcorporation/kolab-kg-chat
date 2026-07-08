@@ -16,7 +16,7 @@ test("추천 검색어 칩은 뜨고, 다음 전송 시 사라진다", async () 
 
   render(<App />);
   fireEvent.change(screen.getByLabelText("질문 입력"), { target: { value: "비커" } });
-  fireEvent.click(screen.getByText("보내기"));
+  fireEvent.click(screen.getByRole("button", { name: "보내기" }));
 
   // 응답 후 칩 영역이 뜬다
   await waitFor(() => expect(screen.getByTestId("suggestions")).toBeInTheDocument());
