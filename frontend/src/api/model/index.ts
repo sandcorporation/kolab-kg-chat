@@ -10,6 +10,7 @@ export * from './chatIn';
 export * from './clarificationData';
 export * from './errorData';
 export * from './groundingItem';
+export * from './historyMessage';
 export * from './productCard';
 export * from './productCardImageUrl';
 export * from './productCardPriceMax';

@@ -10,7 +10,7 @@ import type {
 } from './model';
 
 /**
- * 리브니스 + DB(age·vector 확장) 가용성 체크 (이슈 02).
+ * 리브니스 + DB(vector·pg_trgm 확장) 가용성 체크.
  * @summary Health
  */
 export type appsCoreApiHealthResponse200 = {

@@ -1,10 +1,15 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // 개발 편의: /chat·/openapi.json 등 백엔드 경로는 로컬 nginx(:80)로 프록시.
 // 운영 빌드는 nginx 멀티스테이지가 dist를 서빙하므로 이 프록시는 dev 전용.
 export default defineConfig({
   plugins: [react()],
+  test: {  // 컴포넌트 단위 테스트(jsdom) — 카드 렌더 등.
+    environment: "jsdom",
+    globals: true,
+    setupFiles: "./src/test-setup.ts",
+  },
   server: {
     proxy: {
       "/chat": { target: "http://localhost:80", changeOrigin: true },

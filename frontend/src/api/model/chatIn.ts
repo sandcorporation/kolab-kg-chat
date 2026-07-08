@@ -4,10 +4,12 @@
  * Kolab KG Chat API
  * OpenAPI spec version: 0.1.0
  */
+import type { HistoryMessage } from './historyMessage';
 
 /**
  * POST /chat 요청 본문.
  */
 export interface ChatIn {
   query: string;
+  history?: HistoryMessage[];
 }

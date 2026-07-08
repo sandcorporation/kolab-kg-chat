@@ -16,5 +16,7 @@ export interface ProductCard {
   image_url?: ProductCardImageUrl;
   price_min?: ProductCardPriceMin;
   price_max?: ProductCardPriceMax;
+  soldout?: boolean;
+  soldout_options?: string[];
   grounding?: GroundingItem[];
 }

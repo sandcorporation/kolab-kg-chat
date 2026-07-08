@@ -33,6 +33,8 @@ class ProductCard(Schema):
     image_url: str | None = None
     price_min: int | None = None   # 변형 가격 최저(KRW). 가격 없으면 None
     price_max: int | None = None   # 변형 가격 최고(KRW)
+    soldout: bool = False          # 상품 전체 품절(카드 '품절' 배지)
+    soldout_options: list[str] = []  # 품절 옵션명(있으면 '일부 옵션 품절' 배지 — 가격엔 포함)
     grounding: list[GroundingItem] = []
 
 
