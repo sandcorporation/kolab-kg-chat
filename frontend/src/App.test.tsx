@@ -27,7 +27,7 @@ test("추천 검색어 칩은 뜨고, 다음 전송 시 사라진다", async () 
   await waitFor(() => expect(screen.queryByTestId("suggestions")).not.toBeInTheDocument());
 });
 
-test("품절 안내는 상품별 구매요청 버튼으로 뜨고, 클릭하면 요청됨으로 바뀐다", async () => {
+test("품절 안내는 상품별 구매요청 버튼으로 뜨고, 클릭해도 비활성화되지 않는다", async () => {
   streamChatMock.mockImplementation(async (_q: string, _h: unknown, handlers: any) => {
     handlers.onNotice?.({ prompt: "담당자에게 구매요청을 할까요?", items: ["바이오 폐액통"] });
     handlers.onDone?.();
@@ -38,5 +38,6 @@ test("품절 안내는 상품별 구매요청 버튼으로 뜨고, 클릭하면 
 
   const btn = await screen.findByRole("button", { name: /바이오 폐액통 상품 구매 요청/ });
   fireEvent.click(btn);
-  expect(screen.getByRole("button", { name: /구매 요청됨/ })).toBeInTheDocument();
+  expect(btn).toBeEnabled();                       // 비활성화 안 됨
+  expect(btn).toHaveTextContent("상품 구매 요청");   // 텍스트 그대로
 });

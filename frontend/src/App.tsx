@@ -240,28 +240,18 @@ export function SuggestionChips({
   );
 }
 
-// 품절 상품 구매요청 — 프롬프트 + 상품별 버튼. 클릭 시 로컬로 '요청됨' 표시(실제 구매 기능 없음).
+// 품절 상품 구매요청 — 프롬프트 + 상품별 버튼. 비활성화 없이 누르는 시각 피드백만(:active).
 export function PurchaseRequest({ notice }: { notice: NoticeData }) {
-  const [requested, setRequested] = useState<string[]>([]);
   const items = notice.items ?? [];
   return (
     <div className="notice" data-testid="soldout-notice">
       <p className="notice__prompt">{notice.prompt}</p>
       <div className="notice__actions">
-        {items.map((name) => {
-          const done = requested.includes(name);
-          return (
-            <button
-              key={name}
-              type="button"
-              className="notice__btn"
-              disabled={done}
-              onClick={() => setRequested((r) => [...r, name])}
-            >
-              {done ? `${name} 구매 요청됨 ✓` : `${name} 상품 구매 요청`}
-            </button>
-          );
-        })}
+        {items.map((name) => (
+          <button key={name} type="button" className="notice__btn">
+            {name} 상품 구매 요청
+          </button>
+        ))}
       </div>
     </div>
   );

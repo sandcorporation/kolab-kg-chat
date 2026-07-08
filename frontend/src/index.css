@@ -150,11 +150,9 @@ body {
   transition: background .15s, border-color .15s, transform .1s;
 }
 .notice__btn::before { content: "＋"; color: var(--partial); font-weight: 800; font-size: 13px; }
-.notice__btn:hover:not(:disabled) { background: color-mix(in srgb, var(--partial-soft) 55%, #fff); border-color: var(--partial); }
-.notice__btn:active:not(:disabled) { transform: scale(.98); }
+.notice__btn:hover { background: color-mix(in srgb, var(--partial-soft) 45%, #fff); border-color: var(--partial); }
+.notice__btn:active { background: var(--partial-soft); border-color: var(--partial); transform: scale(.97); }
 .notice__btn:focus-visible { outline: 2px solid var(--partial); outline-offset: 2px; }
-.notice__btn:disabled { cursor: default; color: var(--muted); background: var(--ground-2); border-color: var(--line); }
-.notice__btn:disabled::before { content: ""; }
 
 /* ── 후속 검색어 — 탭 가능한 정제된 행 ─────────────── */
 .chips {
