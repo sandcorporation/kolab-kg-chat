@@ -66,6 +66,27 @@ async def test_available_recommendation_has_no_soldout_notice():
     assert "재고 문의" not in frames.decode("utf-8")
 
 
+class FakeSuggester:
+    def __init__(self, suggestions):
+        self._s = suggestions
+
+    async def suggest(self, query, product_names, history=None):
+        return self._s
+
+
+async def test_stream_emits_suggestions_event():
+    # 추천 뒤에 후속 검색어(칩) 이벤트를 흘린다.
+    agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"])
+    enricher = FakeEnricher([_card("1548728629")])
+    suggester = FakeSuggester(["더 저렴한 것", "다른 브랜드"])
+    frames = b"".join([
+        c async for c in agent_event_stream(agent, enricher, "q", suggester=suggester)
+    ])
+    text = frames.decode("utf-8")
+    assert "event: suggestions" in text
+    assert "더 저렴한 것" in text and "다른 브랜드" in text
+
+
 async def test_soldout_option_notice_names_the_option():
     # 일부 옵션 품절이면 안내가 그 옵션명을 명시한다(가격엔 포함됨).
     agent = FakeAgent(tokens=["추천합니다."], recommended=["p1"])

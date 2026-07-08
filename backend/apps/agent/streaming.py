@@ -29,11 +29,12 @@ def sse(event_type: str, data: dict) -> bytes:
     return frame.encode("utf-8")
 
 
-async def agent_event_stream(agent, enricher, query: str, history=None):
+async def agent_event_stream(agent, enricher, query: str, history=None, suggester=None):
     """langgraph 에이전트 기반 SSE 스트림 (이슈 04, ADR-0011).
 
-    token(추천 근거) → recommendation(결정적으로 부착된 카드) → done.
-    products가 비면 UI는 근거(되묻기 문구)만 보여준다.
+    token(추천 근거) → recommendation(카드) → (suggestions: 후속 검색어 칩) → done.
+    products가 비면 UI는 근거(되묻기 문구)만 보여준다. suggester가 있으면 응답 뒤에
+    사용자가 클릭해 이어갈 후속 검색어를 붙인다(타이핑 없이 대화 지속).
     """
     try:
         recommended: list[str] = []
@@ -49,6 +50,12 @@ async def agent_event_stream(agent, enricher, query: str, history=None):
         if notice:
             yield sse("token", {"content": notice})
         yield sse("recommendation", {"products": cards})
+        if suggester is not None:  # 후속 검색어 칩(타이핑 없이 대화 지속)
+            suggestions = await suggester.suggest(
+                query, [c.get("name", "") for c in cards], history
+            )
+            if suggestions:
+                yield sse("suggestions", {"suggestions": suggestions})
         yield sse("done", {})
     except Exception as exc:  # noqa: BLE001 — 스트림 내 오류는 error 이벤트로
         yield sse("error", {"message": str(exc)})

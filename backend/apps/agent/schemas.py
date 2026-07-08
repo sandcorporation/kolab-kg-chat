@@ -63,6 +63,11 @@ class ErrorData(Schema):
     message: str
 
 
+class SuggestionsData(Schema):
+    """event: suggestions — 응답 뒤 후속 검색어 칩(클릭해 대화 지속)."""
+    suggestions: list[str] = []
+
+
 class ChatEventCatalog(Schema):
     """SSE 이벤트 페이로드 카탈로그(코드젠 전용)."""
     token: TokenData
@@ -70,3 +75,4 @@ class ChatEventCatalog(Schema):
     clarification: ClarificationData
     status: StatusData
     error: ErrorData
+    suggestions: SuggestionsData

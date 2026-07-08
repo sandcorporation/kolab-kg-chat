@@ -11,6 +11,7 @@ from dataclasses import dataclass
 class AgentContext:
     agent: object   # astream(query)/run(query) 지원
     enricher: object  # enrich(ids) 지원
+    suggester: object | None = None  # suggest(query, names) → 후속 검색어 칩(선택)
 
 
 _context: AgentContext | None = None
@@ -81,4 +82,6 @@ def build_default_context() -> AgentContext:
     analyzer = QueryAnalyzer(model)  # ADR-0017: 질의생성 복구 + 반복 루프 라우팅
     reranker = LLMReranker(model)    # ADR-0019: 리랭커 주도(≥임계·top-K), 선택 LLM 강등
     agent = RagRecommender(model, retriever, analyzer, reranker=reranker)
-    return AgentContext(agent=agent, enricher=enricher)
+    from apps.agent.suggest import LLMSuggester
+    suggester = LLMSuggester(model)  # 응답 뒤 후속 검색어 칩(타이핑 없이 대화 지속)
+    return AgentContext(agent=agent, enricher=enricher, suggester=suggester)

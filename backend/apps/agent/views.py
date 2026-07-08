@@ -27,7 +27,10 @@ async def chat_stream(request):
 
     context = _context()
     response = StreamingHttpResponse(
-        agent_event_stream(context.agent, context.enricher, query, history=history),
+        agent_event_stream(
+            context.agent, context.enricher, query, history=history,
+            suggester=getattr(context, "suggester", None),
+        ),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"

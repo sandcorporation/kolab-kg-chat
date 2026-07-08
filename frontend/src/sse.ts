@@ -4,6 +4,7 @@ import type {
   ProductCard,
   RecommendationData,
   StatusData,
+  SuggestionsData,
   TokenData,
 } from "./api/model";
 
@@ -12,6 +13,7 @@ export interface ChatHandlers {
   onRecommendation?: (products: ProductCard[]) => void;
   onClarification?: (question: string) => void;
   onStatus?: (label: string) => void;
+  onSuggestions?: (suggestions: string[]) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -88,6 +90,9 @@ function dispatchFrame(frame: string, handlers: ChatHandlers): void {
       break;
     case "status":
       handlers.onStatus?.((payload as StatusData).label);
+      break;
+    case "suggestions":
+      handlers.onSuggestions?.((payload as SuggestionsData).suggestions ?? []);
       break;
     case "error":
       handlers.onError?.((payload as ErrorData).message);

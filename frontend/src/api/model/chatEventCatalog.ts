@@ -9,6 +9,7 @@ import type { RecommendationData } from './recommendationData';
 import type { ClarificationData } from './clarificationData';
 import type { StatusData } from './statusData';
 import type { ErrorData } from './errorData';
+import type { SuggestionsData } from './suggestionsData';
 
 /**
  * SSE 이벤트 페이로드 카탈로그(코드젠 전용).
@@ -19,4 +20,5 @@ export interface ChatEventCatalog {
   clarification: ClarificationData;
   status: StatusData;
   error: ErrorData;
+  suggestions: SuggestionsData;
 }

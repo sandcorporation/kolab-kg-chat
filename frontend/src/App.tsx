@@ -9,6 +9,7 @@ interface BotTurn {
   rationale: string;
   status: string;
   products: ProductCard[];
+  suggestions?: string[];
   streaming: boolean;
 }
 interface UserTurn {
@@ -40,11 +41,11 @@ export function App() {
       return next;
     });
 
-  const send = async () => {
-    const query = input.trim();
+  const send = async (override?: string) => {
+    const query = (override ?? input).trim();  // override: 칩 클릭 시 그 텍스트로 전송
     if (!query || busy) return;
     const history = buildHistory(turns);  // 새 턴 추가 전, 현재까지의 대화를 직렬화
-    setInput("");
+    if (override === undefined) setInput("");
     setBusy(true);
     setTurns((prev) => [
       ...prev,
@@ -66,6 +67,7 @@ export function App() {
       onClarification: (question) =>
         patchBot((t) => ({ ...t, status: "", rationale: t.rationale + question })),
       onRecommendation: (products) => patchBot((t) => ({ ...t, products })),
+      onSuggestions: (suggestions) => patchBot((t) => ({ ...t, suggestions })),
       onError: (message) =>
         patchBot((t) => ({ ...t, rationale: t.rationale || `오류: ${message}` })),
       onDone: () => patchBot((t) => ({ ...t, streaming: false })),
@@ -114,6 +116,9 @@ export function App() {
                   ))}
                 </div>
               )}
+              {!turn.streaming && (
+                <SuggestionChips suggestions={turn.suggestions ?? []} onPick={(s) => send(s)} />
+              )}
             </div>
           ),
         )}
@@ -128,7 +133,7 @@ export function App() {
           aria-label="질문 입력"
           disabled={busy}
         />
-        <button onClick={send} disabled={busy || !input.trim()}>
+        <button onClick={() => send()} disabled={busy || !input.trim()}>
           보내기
         </button>
       </div>
@@ -186,5 +191,25 @@ export function ProductCardView({ product }: { product: ProductCard }) {
         </div>
       </div>
     </a>
+  );
+}
+
+// 후속 검색어 칩 — 클릭하면 타이핑 없이 그 텍스트로 대화를 이어간다.
+export function SuggestionChips({
+  suggestions,
+  onPick,
+}: {
+  suggestions: string[];
+  onPick: (text: string) => void;
+}) {
+  if (!suggestions.length) return null;
+  return (
+    <div className="chips" data-testid="suggestions">
+      {suggestions.map((s, i) => (
+        <button key={i} type="button" className="chip" onClick={() => onPick(s)}>
+          {s}
+        </button>
+      ))}
+    </div>
   );
 }
