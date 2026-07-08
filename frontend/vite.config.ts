@@ -5,10 +5,11 @@ import { defineConfig } from "vitest/config";
 // 운영 빌드는 nginx 멀티스테이지가 dist를 서빙하므로 이 프록시는 dev 전용.
 export default defineConfig({
   plugins: [react()],
-  test: {  // 컴포넌트 단위 테스트(jsdom) — 카드 렌더 등.
+  test: {  // 컴포넌트 단위 테스트(jsdom) — 카드 렌더 등. Playwright e2e(spec)는 제외.
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test-setup.ts",
+    include: ["src/**/*.test.{ts,tsx}"],
   },
   server: {
     proxy: {

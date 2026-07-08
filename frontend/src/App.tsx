@@ -9,7 +9,6 @@ interface BotTurn {
   rationale: string;
   status: string;
   products: ProductCard[];
-  suggestions?: string[];
   streaming: boolean;
 }
 interface UserTurn {
@@ -22,6 +21,8 @@ export function App() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // 최신 응답의 후속 검색어(입력창 위 한 벌). 전송·칩클릭 시 비워 사라지게 한다.
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const scrollToEnd = () =>
@@ -46,6 +47,7 @@ export function App() {
     if (!query || busy) return;
     const history = buildHistory(turns);  // 새 턴 추가 전, 현재까지의 대화를 직렬화
     if (override === undefined) setInput("");
+    setSuggestions([]);  // 전송·칩클릭 즉시 이전 후속 검색어를 걷어낸다
     setBusy(true);
     setTurns((prev) => [
       ...prev,
@@ -67,7 +69,7 @@ export function App() {
       onClarification: (question) =>
         patchBot((t) => ({ ...t, status: "", rationale: t.rationale + question })),
       onRecommendation: (products) => patchBot((t) => ({ ...t, products })),
-      onSuggestions: (suggestions) => patchBot((t) => ({ ...t, suggestions })),
+      onSuggestions: (s) => setSuggestions(s),
       onError: (message) =>
         patchBot((t) => ({ ...t, rationale: t.rationale || `오류: ${message}` })),
       onDone: () => patchBot((t) => ({ ...t, streaming: false })),
@@ -116,14 +118,14 @@ export function App() {
                   ))}
                 </div>
               )}
-              {!turn.streaming && (
-                <SuggestionChips suggestions={turn.suggestions ?? []} onPick={(s) => send(s)} />
-              )}
             </div>
           ),
         )}
       </div>
 
+      {!busy && (
+        <SuggestionChips suggestions={suggestions} onPick={(s) => send(s)} />
+      )}
       <div className="composer">
         <input
           value={input}
