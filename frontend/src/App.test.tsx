@@ -26,3 +26,14 @@ test("추천 검색어 칩은 뜨고, 다음 전송 시 사라진다", async () 
   fireEvent.click(screen.getByText("더 저렴한 것"));
   await waitFor(() => expect(screen.queryByTestId("suggestions")).not.toBeInTheDocument());
 });
+
+test("품절 안내는 근거와 분리된 별도 박스로 표시된다", async () => {
+  streamChatMock.mockImplementation(async (_q: string, _h: unknown, handlers: any) => {
+    handlers.onNotice?.("해당 상품의 옵션은 품절되었습니다. 담당자에게 재고 문의를 할까요?");
+    handlers.onDone?.();
+  });
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("질문 입력"), { target: { value: "폐액통" } });
+  fireEvent.click(screen.getByRole("button", { name: "보내기" }));
+  await waitFor(() => expect(screen.getByTestId("soldout-notice")).toHaveTextContent("품절"));
+});

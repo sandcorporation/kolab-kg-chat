@@ -49,21 +49,21 @@ async def test_event_stream_emits_typed_events():
     assert "event: done" in text
 
 
-async def test_soldout_recommendation_appends_notice():
-    # 추천에 품절 상품이 포함되면 안내 메시지를 붙이고, 카드도 그대로 보여준다.
+async def test_soldout_notice_is_separate_event():
+    # 품절 상품이 있으면 근거 토큰과 섞지 않고 별도 notice 이벤트로 흘린다(카드도 그대로).
     agent = FakeAgent(tokens=["추천합니다."], recommended=["s1"])
     card = _card("s1")
     card["soldout"] = True
     frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
     text = frames.decode("utf-8")
-    assert "품절" in text and "재고 문의" in text
+    assert "event: notice" in text and "품절" in text and "재고 문의" in text
     assert "event: recommendation" in text and "s1" in text
 
 
-async def test_available_recommendation_has_no_soldout_notice():
+async def test_available_recommendation_has_no_notice_event():
     agent = FakeAgent(tokens=["추천합니다."], recommended=["1548728629"])
     frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([_card("1548728629")]), "q")])
-    assert "재고 문의" not in frames.decode("utf-8")
+    assert "event: notice" not in frames.decode("utf-8")
 
 
 class FakeSuggester:
@@ -95,6 +95,7 @@ async def test_soldout_option_notice_names_the_option():
     card["soldout_options"] = ["10L PE 핸들비이커"]
     frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
     text = frames.decode("utf-8")
+    assert "event: notice" in text
     assert "10L PE 핸들비이커" in text and "품절" in text and "재고 문의" in text
 
 

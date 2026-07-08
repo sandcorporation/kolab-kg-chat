@@ -131,6 +131,15 @@ body {
 .card__soldout::before { content: ""; width: 5px; height: 5px; border-radius: 99px; background: currentColor; }
 .card__soldout--partial { color: var(--partial); background: var(--partial-soft); }
 
+/* 품절 안내 — 근거와 분리된 별도 박스 */
+.notice {
+  margin: 0;
+  font-size: 12.5px; line-height: 1.5; color: #7a5a1e;
+  background: linear-gradient(0deg, var(--partial-soft), color-mix(in srgb, var(--partial-soft) 45%, #fff));
+  border: 1px solid color-mix(in srgb, var(--partial) 22%, #fff);
+  padding: 10px 12px; border-radius: var(--r-sm);
+}
+
 /* ── 후속 검색어 — 탭 가능한 정제된 행 ─────────────── */
 .chips {
   display: flex; flex-direction: column; gap: 3px;

@@ -1,6 +1,7 @@
 import type {
   ClarificationData,
   ErrorData,
+  NoticeData,
   ProductCard,
   RecommendationData,
   StatusData,
@@ -14,6 +15,7 @@ export interface ChatHandlers {
   onClarification?: (question: string) => void;
   onStatus?: (label: string) => void;
   onSuggestions?: (suggestions: string[]) => void;
+  onNotice?: (message: string) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -93,6 +95,9 @@ function dispatchFrame(frame: string, handlers: ChatHandlers): void {
       break;
     case "suggestions":
       handlers.onSuggestions?.((payload as SuggestionsData).suggestions ?? []);
+      break;
+    case "notice":
+      handlers.onNotice?.((payload as NoticeData).message);
       break;
     case "error":
       handlers.onError?.((payload as ErrorData).message);

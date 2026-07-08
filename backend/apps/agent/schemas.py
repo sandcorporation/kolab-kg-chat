@@ -68,6 +68,11 @@ class SuggestionsData(Schema):
     suggestions: list[str] = []
 
 
+class NoticeData(Schema):
+    """event: notice — 품절 등 안내(근거와 분리된 별도 박스로 표시)."""
+    message: str
+
+
 class ChatEventCatalog(Schema):
     """SSE 이벤트 페이로드 카탈로그(코드젠 전용)."""
     token: TokenData
@@ -76,3 +81,4 @@ class ChatEventCatalog(Schema):
     status: StatusData
     error: ErrorData
     suggestions: SuggestionsData
+    notice: NoticeData

@@ -9,6 +9,7 @@ interface BotTurn {
   rationale: string;
   status: string;
   products: ProductCard[];
+  notice: string;
   streaming: boolean;
 }
 interface UserTurn {
@@ -52,7 +53,7 @@ export function App() {
     setTurns((prev) => [
       ...prev,
       { role: "user", text: query },
-      { role: "bot", rationale: "", status: "", products: [], streaming: true },
+      { role: "bot", rationale: "", status: "", products: [], notice: "", streaming: true },
     ]);
     scrollToEnd();
 
@@ -70,6 +71,7 @@ export function App() {
         patchBot((t) => ({ ...t, status: "", rationale: t.rationale + question })),
       onRecommendation: (products) => patchBot((t) => ({ ...t, products })),
       onSuggestions: (s) => setSuggestions(s),
+      onNotice: (message) => patchBot((t) => ({ ...t, notice: message })),
       onError: (message) =>
         patchBot((t) => ({ ...t, rationale: t.rationale || `오류: ${message}` })),
       onDone: () => patchBot((t) => ({ ...t, streaming: false })),
@@ -117,6 +119,9 @@ export function App() {
                     <ProductCardView key={p.source_id} product={p} />
                   ))}
                 </div>
+              )}
+              {turn.notice && (
+                <p className="notice" data-testid="soldout-notice">{turn.notice}</p>
               )}
             </div>
           ),

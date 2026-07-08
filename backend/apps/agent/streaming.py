@@ -21,7 +21,7 @@ def _soldout_notice(cards) -> str:
             lines.append(f"'{name}'의 다음 옵션은 품절되었습니다: {', '.join(opts)}")
         elif c.get("soldout"):  # 상품 전체 품절
             lines.append(f"'{name}'은(는) 품절되었습니다")
-    return ("\n\n" + " / ".join(lines) + "." + _SOLDOUT_SUFFIX) if lines else ""
+    return (" / ".join(lines) + "." + _SOLDOUT_SUFFIX) if lines else ""
 
 
 def sse(event_type: str, data: dict) -> bytes:
@@ -32,9 +32,9 @@ def sse(event_type: str, data: dict) -> bytes:
 async def agent_event_stream(agent, enricher, query: str, history=None, suggester=None):
     """langgraph 에이전트 기반 SSE 스트림 (이슈 04, ADR-0011).
 
-    token(추천 근거) → recommendation(카드) → (suggestions: 후속 검색어 칩) → done.
-    products가 비면 UI는 근거(되묻기 문구)만 보여준다. suggester가 있으면 응답 뒤에
-    사용자가 클릭해 이어갈 후속 검색어를 붙인다(타이핑 없이 대화 지속).
+    token(추천 근거) → recommendation(카드) → (notice: 품절 안내) → (suggestions: 후속 칩) → done.
+    products가 비면 UI는 근거(되묻기 문구)만 보여준다. 품절 안내는 근거 텍스트와 섞지 않고
+    별도 notice 이벤트로 흘려 UI가 구분된 박스로 보여준다.
     """
     try:
         recommended: list[str] = []
@@ -46,10 +46,10 @@ async def agent_event_stream(agent, enricher, query: str, history=None, suggeste
             elif event["type"] == "result":
                 recommended = event["recommended_ids"]
         cards = await enricher.enrich(recommended)
-        notice = _soldout_notice(cards)  # 품절 상품·옵션 포함 → 재고 문의 안내
-        if notice:
-            yield sse("token", {"content": notice})
         yield sse("recommendation", {"products": cards})
+        notice = _soldout_notice(cards)  # 품절 상품·옵션 포함 → 별도 안내 박스
+        if notice:
+            yield sse("notice", {"message": notice})
         if suggester is not None:  # 후속 검색어 칩(타이핑 없이 대화 지속)
             suggestions = await suggester.suggest(
                 query, [c.get("name", "") for c in cards], history
