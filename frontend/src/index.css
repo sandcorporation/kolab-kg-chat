@@ -48,9 +48,11 @@ body { margin: 0; background: var(--bg); }
 .tag { font-size: 12px; padding: 2px 8px; border-radius: 3px; background: #f2f2f2; color: #555; }
 .tag--vision { background: var(--kolab-gold-soft); color: #8a5a00; }
 .tag--llm_text { background: #eaeefe; color: #34459a; }
-.chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { font-size: 13px; padding: 5px 12px; border-radius: 16px; border: 1px solid var(--line); background: #fff; color: var(--kolab); cursor: pointer; transition: background .15s, border-color .15s; }
-.chip:hover { background: var(--kolab-gold-soft); border-color: var(--kolab); }
+/* 후속 검색어 — 칩이 아니라 세로로 나열된 평범한 클릭 텍스트. 채팅과 같은 배경으로 블렌드. */
+.chips { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 20px; background: var(--bg); }
+.chip { background: none; border: none; padding: 3px 0; font-size: 14px; font-family: inherit; color: var(--kolab-link); cursor: pointer; text-align: left; }
+.chip::before { content: "› "; color: #bbb; }
+.chip:hover { text-decoration: underline; }
 
 /* 진행 상태줄 — 도구 호출 중(첫 토큰 전) 전환형 표시 */
 .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
