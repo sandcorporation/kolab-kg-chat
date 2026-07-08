@@ -15,7 +15,7 @@ export interface ChatHandlers {
   onClarification?: (question: string) => void;
   onStatus?: (label: string) => void;
   onSuggestions?: (suggestions: string[]) => void;
-  onNotice?: (message: string) => void;
+  onNotice?: (notice: NoticeData) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -97,7 +97,7 @@ function dispatchFrame(frame: string, handlers: ChatHandlers): void {
       handlers.onSuggestions?.((payload as SuggestionsData).suggestions ?? []);
       break;
     case "notice":
-      handlers.onNotice?.((payload as NoticeData).message);
+      handlers.onNotice?.(payload as NoticeData);
       break;
     case "error":
       handlers.onError?.((payload as ErrorData).message);

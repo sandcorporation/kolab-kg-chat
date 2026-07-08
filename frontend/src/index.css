@@ -131,14 +131,30 @@ body {
 .card__soldout::before { content: ""; width: 5px; height: 5px; border-radius: 99px; background: currentColor; }
 .card__soldout--partial { color: var(--partial); background: var(--partial-soft); }
 
-/* 품절 안내 — 근거와 분리된 별도 박스 */
+/* 품절 안내 — 근거와 분리된 별도 박스: 프롬프트 + 상품별 구매요청 버튼 */
 .notice {
   margin: 0;
-  font-size: 12.5px; line-height: 1.5; color: #7a5a1e;
+  display: flex; flex-direction: column; gap: 9px;
   background: linear-gradient(0deg, var(--partial-soft), color-mix(in srgb, var(--partial-soft) 45%, #fff));
   border: 1px solid color-mix(in srgb, var(--partial) 22%, #fff);
-  padding: 10px 12px; border-radius: var(--r-sm);
+  padding: 12px; border-radius: var(--r-sm);
 }
+.notice__prompt { margin: 0; font-size: 13px; font-weight: 640; color: var(--partial); }
+.notice__actions { display: flex; flex-direction: column; gap: 6px; }
+.notice__btn {
+  all: unset; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--ink);
+  background: #fff; border: 1px solid color-mix(in srgb, var(--partial) 32%, #fff);
+  padding: 8px 12px; border-radius: 10px;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.notice__btn::before { content: "＋"; color: var(--partial); font-weight: 800; font-size: 13px; }
+.notice__btn:hover:not(:disabled) { background: color-mix(in srgb, var(--partial-soft) 55%, #fff); border-color: var(--partial); }
+.notice__btn:active:not(:disabled) { transform: scale(.98); }
+.notice__btn:focus-visible { outline: 2px solid var(--partial); outline-offset: 2px; }
+.notice__btn:disabled { cursor: default; color: var(--muted); background: var(--ground-2); border-color: var(--line); }
+.notice__btn:disabled::before { content: ""; }
 
 /* ── 후속 검색어 — 탭 가능한 정제된 행 ─────────────── */
 .chips {

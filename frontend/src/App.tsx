@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ProductCard } from "./api/model";
+import type { NoticeData, ProductCard } from "./api/model";
 import { streamChat, type HistoryTurn } from "./sse";
 
 interface BotTurn {
@@ -9,7 +9,7 @@ interface BotTurn {
   rationale: string;
   status: string;
   products: ProductCard[];
-  notice: string;
+  notice: NoticeData | null;
   streaming: boolean;
 }
 interface UserTurn {
@@ -59,7 +59,7 @@ export function App() {
     setTurns((prev) => [
       ...prev,
       { role: "user", text: query },
-      { role: "bot", rationale: "", status: "", products: [], notice: "", streaming: true },
+      { role: "bot", rationale: "", status: "", products: [], notice: null, streaming: true },
     ]);
     scrollToEnd();
 
@@ -77,7 +77,7 @@ export function App() {
         patchBot((t) => ({ ...t, status: "", rationale: t.rationale + question })),
       onRecommendation: (products) => patchBot((t) => ({ ...t, products })),
       onSuggestions: (s) => setSuggestions(s),
-      onNotice: (message) => patchBot((t) => ({ ...t, notice: message })),
+      onNotice: (notice) => patchBot((t) => ({ ...t, notice })),
       onError: (message) =>
         patchBot((t) => ({ ...t, rationale: t.rationale || `오류: ${message}` })),
       onDone: () => patchBot((t) => ({ ...t, streaming: false })),
@@ -126,9 +126,9 @@ export function App() {
                   ))}
                 </div>
               )}
-              {turn.notice && (
-                <p className="notice" data-testid="soldout-notice">{turn.notice}</p>
-              )}
+              {turn.notice?.items?.length ? (
+                <PurchaseRequest notice={turn.notice} />
+              ) : null}
             </div>
           ),
         )}
@@ -236,6 +236,33 @@ export function SuggestionChips({
           </svg>
         </button>
       ))}
+    </div>
+  );
+}
+
+// 품절 상품 구매요청 — 프롬프트 + 상품별 버튼. 클릭 시 로컬로 '요청됨' 표시(실제 구매 기능 없음).
+export function PurchaseRequest({ notice }: { notice: NoticeData }) {
+  const [requested, setRequested] = useState<string[]>([]);
+  const items = notice.items ?? [];
+  return (
+    <div className="notice" data-testid="soldout-notice">
+      <p className="notice__prompt">{notice.prompt}</p>
+      <div className="notice__actions">
+        {items.map((name) => {
+          const done = requested.includes(name);
+          return (
+            <button
+              key={name}
+              type="button"
+              className="notice__btn"
+              disabled={done}
+              onClick={() => setRequested((r) => [...r, name])}
+            >
+              {done ? `${name} 구매 요청됨 ✓` : `${name} 상품 구매 요청`}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

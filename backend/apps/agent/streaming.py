@@ -8,20 +8,17 @@ from __future__ import annotations
 
 import json
 
-_SOLDOUT_SUFFIX = " 담당자에게 재고 문의 및 구매 요청을 할까요?"
+_SOLDOUT_PROMPT = "담당자에게 구매요청을 할까요?"
 
 
-def _soldout_notice(cards) -> str:
-    """추천에 품절이 있으면 근거 뒤에 붙일 안내(품절 옵션명 명시). 실제 문의·구매 기능은 없음."""
-    lines = []
-    for c in cards:
-        name = c.get("name") or "해당 상품"
-        opts = c.get("soldout_options") or []
-        if opts:  # 일부 옵션 품절 → 어떤 옵션인지 명시(가격엔 포함됨)
-            lines.append(f"'{name}'의 다음 옵션은 품절되었습니다: {', '.join(opts)}")
-        elif c.get("soldout"):  # 상품 전체 품절
-            lines.append(f"'{name}'은(는) 품절되었습니다")
-    return (" / ".join(lines) + "." + _SOLDOUT_SUFFIX) if lines else ""
+def _soldout_items(cards) -> list[str]:
+    """품절(상품 전체 또는 옵션 일부)인 추천 상품명 — 각각 '구매 요청' 버튼이 된다.
+    실제 구매·문의 기능은 없다(UI 안내용)."""
+    return [
+        c.get("name") or "해당 상품"
+        for c in cards
+        if c.get("soldout") or c.get("soldout_options")
+    ]
 
 
 def sse(event_type: str, data: dict) -> bytes:
@@ -47,9 +44,9 @@ async def agent_event_stream(agent, enricher, query: str, history=None, suggeste
                 recommended = event["recommended_ids"]
         cards = await enricher.enrich(recommended)
         yield sse("recommendation", {"products": cards})
-        notice = _soldout_notice(cards)  # 품절 상품·옵션 포함 → 별도 안내 박스
-        if notice:
-            yield sse("notice", {"message": notice})
+        items = _soldout_items(cards)  # 품절 상품 → 상품별 구매요청 버튼 안내
+        if items:
+            yield sse("notice", {"prompt": _SOLDOUT_PROMPT, "items": items})
         if suggester is not None:  # 후속 검색어 칩(타이핑 없이 대화 지속)
             suggestions = await suggester.suggest(
                 query, [c.get("name", "") for c in cards], history

@@ -27,13 +27,16 @@ test("추천 검색어 칩은 뜨고, 다음 전송 시 사라진다", async () 
   await waitFor(() => expect(screen.queryByTestId("suggestions")).not.toBeInTheDocument());
 });
 
-test("품절 안내는 근거와 분리된 별도 박스로 표시된다", async () => {
+test("품절 안내는 상품별 구매요청 버튼으로 뜨고, 클릭하면 요청됨으로 바뀐다", async () => {
   streamChatMock.mockImplementation(async (_q: string, _h: unknown, handlers: any) => {
-    handlers.onNotice?.("해당 상품의 옵션은 품절되었습니다. 담당자에게 재고 문의를 할까요?");
+    handlers.onNotice?.({ prompt: "담당자에게 구매요청을 할까요?", items: ["바이오 폐액통"] });
     handlers.onDone?.();
   });
   render(<App />);
   fireEvent.change(screen.getByLabelText("질문 입력"), { target: { value: "폐액통" } });
   fireEvent.click(screen.getByRole("button", { name: "보내기" }));
-  await waitFor(() => expect(screen.getByTestId("soldout-notice")).toHaveTextContent("품절"));
+
+  const btn = await screen.findByRole("button", { name: /바이오 폐액통 상품 구매 요청/ });
+  fireEvent.click(btn);
+  expect(screen.getByRole("button", { name: /구매 요청됨/ })).toBeInTheDocument();
 });

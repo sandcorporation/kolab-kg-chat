@@ -6,8 +6,9 @@
  */
 
 /**
- * event: notice — 품절 등 안내(근거와 분리된 별도 박스로 표시).
+ * event: notice — 품절 상품 구매요청 안내(프롬프트 + 상품별 요청 버튼).
  */
 export interface NoticeData {
-  message: string;
+  prompt?: string;
+  items?: string[];
 }

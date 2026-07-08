@@ -49,14 +49,14 @@ async def test_event_stream_emits_typed_events():
     assert "event: done" in text
 
 
-async def test_soldout_notice_is_separate_event():
-    # 품절 상품이 있으면 근거 토큰과 섞지 않고 별도 notice 이벤트로 흘린다(카드도 그대로).
+async def test_soldout_notice_is_separate_event_with_items():
+    # 품절 상품은 별도 notice 이벤트(프롬프트 + 상품명 items → 구매요청 버튼)로 흘린다(카드도 그대로).
     agent = FakeAgent(tokens=["추천합니다."], recommended=["s1"])
     card = _card("s1")
     card["soldout"] = True
     frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
     text = frames.decode("utf-8")
-    assert "event: notice" in text and "품절" in text and "재고 문의" in text
+    assert "event: notice" in text and "구매요청" in text and "메스플라스크" in text
     assert "event: recommendation" in text and "s1" in text
 
 
@@ -87,16 +87,15 @@ async def test_stream_emits_suggestions_event():
     assert "더 저렴한 것" in text and "다른 브랜드" in text
 
 
-async def test_soldout_option_notice_names_the_option():
-    # 일부 옵션 품절이면 안내가 그 옵션명을 명시한다(가격엔 포함됨).
+async def test_partial_soldout_product_gets_purchase_item():
+    # 일부 옵션 품절 상품도 notice items(구매요청 버튼)에 상품명으로 포함된다.
     agent = FakeAgent(tokens=["추천합니다."], recommended=["p1"])
     card = _card("p1")
     card["soldout"] = False
     card["soldout_options"] = ["10L PE 핸들비이커"]
     frames = b"".join([c async for c in agent_event_stream(agent, FakeEnricher([card]), "q")])
     text = frames.decode("utf-8")
-    assert "event: notice" in text
-    assert "10L PE 핸들비이커" in text and "품절" in text and "재고 문의" in text
+    assert "event: notice" in text and "메스플라스크" in text and "구매요청" in text
 
 
 async def test_event_stream_emits_status_event():
