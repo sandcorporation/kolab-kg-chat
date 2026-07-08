@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ProductCard } from "./api/model";
@@ -30,6 +30,12 @@ export function App() {
     requestAnimationFrame(() => {
       chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
     });
+
+  // 콘텐츠·레이아웃 변화(토큰·카드·안내·추천어 등장, busy 토글로 추천어 영역이 뜨며 채팅 높이가
+  // 줄 때) 후 항상 하단으로 스크롤 — 마지막 카드가 추천어와 겹쳐 잘리는 문제 방지. DOM 커밋 뒤 실행.
+  useEffect(() => {
+    scrollToEnd();
+  }, [turns, suggestions, busy]);
 
   const patchBot = (fn: (t: BotTurn) => BotTurn) =>
     setTurns((prev) => {
