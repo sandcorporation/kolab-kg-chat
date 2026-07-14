@@ -67,7 +67,7 @@ $COMPOSE run --rm api python manage.py embed_products --sample-diverse --reset -
 > $COMPOSE run --rm api python manage.py embed_products --by-category --per-category 3 --reset --concurrency 8
 > ```
 
-적재는 상품마다 **LLM 설명으로 강화한 임베딩**(검색용, ADR-0015)과 설명만 서비스 DB에 저장합니다 — 상품 데이터는 복제하지 않습니다(C: 소스 하이드레이션, ADR-0016). 강화 임베딩은 한국어 질의가 영어 상품명을 찾도록 인덱스가 지능을 갖게 합니다. content-hash로 안 바뀐 상품은 재생성을 건너뜁니다. 대규모 카탈로그의 최초 강화는 `embed_products --concurrency N`(LLM 설명·임베딩 호출 병렬화)으로 가속합니다. 적재가 끝나면 검색 가속용 HNSW 근사최근접 인덱스를 자동 빌드합니다(대규모·비동기 OpenAI Batch API 경로는 향후 고려).
+적재는 상품마다 **LLM 설명으로 강화한 임베딩**(검색용, ADR-0015)과 설명만 서비스 DB에 저장합니다 — 상품 데이터는 복제하지 않습니다(C: 소스 하이드레이션, ADR-0016). 강화 임베딩은 한국어 질의가 영어 상품명을 찾도록 인덱스가 지능을 갖게 합니다. content-hash로 안 바뀐 상품은 재생성을 건너뜁니다. 대규모 카탈로그의 최초 강화는 `embed_products --concurrency N`(LLM 설명·임베딩 호출 병렬화)으로 가속합니다. 적재가 끝나면 검색 가속용 HNSW 근사최근접 인덱스를 자동 빌드합니다.
 
 또한 적재 시 상품의 **숫자 속성**(가격·순도·분자량·보관온도)을 색인해 "N원 이하"·"순도 99% 이상"·"냉장 2~8도" 같은 **숫자 제약을 하드 필터**로 처리합니다(ADR-0018). 위 `embed_products`/`ingest_products`가 이 컬럼을 함께 채웁니다(기존 배포에 도입 시엔 `embed_products --reset`로 재적재 필요).
 
